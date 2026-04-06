@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+//  ALUMNO 
+
+model Student {
+  id              String           @id @default(uuid()) @map("id_alumno")
+  accountNumber   Int              @unique @map("numeroCuenta") 
+  name            String           @map("nombre")
+  lastNameP       String           @map("apellidoP")
+  lastNameM       String           @map("apellidoM")
+  interest        String?           @map("interes")
+  currentSemester Int              @map("semestreAct")
+  average         Int              @map("promedio")
+  locationId      String?          @map("id_ubicacion")
+
+  aiResults       AIResult[]
+  // ESTO ES NUEVO: Relación con la tabla intermedia
+  contests        StudentContest[] 
+  experiences     ProfessionalExperience[]
+
+  @@map("alumno")
+}
+
+//  CATEGORIAIA 
+model AICategory {
+  id    String @id @default(uuid()) @map("id_categoriaIA")
+  name  String @map("nombre") // Ej: "Desarrollo", "Seguridad", "Data"
+
+  results AIResult[]
+
+  @@map("categoria_ia")
+}
+//  RESULTADO IA 
+model AIResult {
+  id           String @id @default(uuid()) @map("id_resultadoIA")
+  
+  // Campos de la simulación de IA
+  optionA      String @map("opcionA")
+  descriptionA String @map("descripcionA")
+  optionB      String @map("opcionB")
+  descriptionB String @map("descripcionB")
+  optionC      String @map("opcionC")
+  descriptionC String @map("descripcionC")
+  optionD      String @map("opcionD")
+  descriptionD String @map("descripcionD")
+  optionE      String @map("opcionE")
+  descriptionE String @map("descripcionE")
+
+  // Llaves foráneas
+  studentId    String @map("id_alumno")
+  categoryId   String @map("id_categoriaIA")
+
+  // Relaciones lógicas (Puentes de Prisma)
+  student      Student    @relation(fields: [studentId], references: [id])
+  category     AICategory @relation(fields: [categoryId], references: [id])
+
+  @@map("resultado_ia")
+}
+
+//  AREA EXPERTISE 
+model AreaExpertise {
+  id    String @id @default(uuid()) @map("id_areaExpertise")
+  name  String @map("areaExpertise")
+  experiences ProfessionalExperience[]
+
+  @@map("area_expertise")
+}
+
+model ProfessionalExperience {
+  id              String @id @default(uuid()) @map("id_experienciaP")
+  areaExpertiseId String @map("id_AreaExpertise")
+  studentId       String @map("id_alumno") 
+  categoryId      String @map("id_categoria")
+
+  // RELACIONES
+  student       Student       @relation(fields: [studentId], references: [id])
+  areaExpertise AreaExpertise @relation(fields: [areaExpertiseId], references: [id])
+
+  @@map("experiencia_profesional")
+}
+// CONCURSO
+model Contest {
+  id         String           @id @default(uuid()) @map("id_Concurso")
+  name       String           @map("concurso")
+  categoryId String           @map("id_categoria")
+  
+  students   StudentContest[]
+
+  @@map("concurso")
+}
+//  ALUMNO-CONCURSO //
+model StudentContest {
+  id        String @id @default(uuid()) @map("id_concursoAlumno")
+  contestId String @map("id_concurso")
+  studentId String @map("id_alumno")
+  student   Student @relation(fields: [studentId], references: [id])
+  contest   Contest @relation(fields: [contestId], references: [id])
+
+  @@map("concurso_alumno")
+}

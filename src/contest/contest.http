@@ -1,0 +1,30 @@
+POST http://localhost:3001/api/contests
+Content-Type: application/json
+
+{
+    "name":"Hackaton NESTJS",
+    "categoryId": "2"
+}
+###
+POST http://localhost:3001/api/contests/enroll
+Content-Type: application/json
+
+{
+    "studentId":"1fd55f30-7b92-4fcb-b650-19217392ff7c",
+    "contestId":"37cd5f1f-a615-4256-8521-6cff0a7bc15a"
+}
+
+###
+DELETE http://localhost:3001/api/students/remove-contest/3963944e-29ae-4ba9-b39d-c38152bed96e
+
+
+###
+GET http://localhost:3001/api/contests/student/1fd55f30-7b92-4fcb-b650-19217392ff7c
+
+
+
+###
+GET http://localhost:3001/api/contests
+
+###
+GET http://localhost:3001/api/contests/with-contests/321191399
