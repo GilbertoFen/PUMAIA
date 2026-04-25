@@ -30,6 +30,8 @@ model Student {
   // ESTO ES NUEVO: Relación con la tabla intermedia
   contests        StudentContest[] 
   experiences     ProfessionalExperience[]
+  grades          Grades[]
+  careers StudentCareer[]
 
   @@map("alumno")
 }
@@ -106,8 +108,119 @@ model StudentContest {
   id        String @id @default(uuid()) @map("id_concursoAlumno")
   contestId String @map("id_concurso")
   studentId String @map("id_alumno")
+
   student   Student @relation(fields: [studentId], references: [id])
   contest   Contest @relation(fields: [contestId], references: [id])
 
   @@map("concurso_alumno")
+}
+
+
+// AREA CONOCIMIENTO //
+model KnowledgeArea{
+  id            String @id @default(uuid()) @map("id_areaConocimiento")
+  knowledgeArea KnowledgeAreaEnum
+
+  careers       Career[]
+
+  @@map("area_conocimiento") 
+}
+
+enum KnowledgeAreaEnum {
+    CIENCIAS_FISICO_MATEMATICAS_Y_DE_LAS_INGENIERIAS
+    CIENCIAS_BIOLOGICAS_Y_DE_LA_SALUD
+    CIENCIAS_SOCIALES
+    HUMANIDADES_Y_ARTES
+}
+
+// PLAN DE ESTUDIOS //
+model StudyPlan{
+  id        String @id @default(uuid()) @map("id_planEstudios")
+  studyPlan String @map("planEstudios")
+  semesters Int @map("cantidadSemestres")
+
+  careers   Career[]
+
+  @@map("plan_estudios")
+}
+
+// Category //
+model Category{
+  id        String @id @default(uuid()) @map("id_categoria")
+  category  CategoryEnum
+
+  subjects Subject[]
+
+  @@map("categorias")
+}
+
+enum CategoryEnum{
+    MATEMATICAS
+    PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION
+    MATEMATICAS_COMPUTACIONALES
+    COMPUTACION
+    HUMANISTICA_SOCIAL
+    MODELADO_ANALITICO
+    MODELADO_ESTOCASTICO
+    ADMINISTRACION_Y_FINANZAS
+    SISTEMAS_COMPUTACIONALES
+    CIENCIAS_DE_LA_COMPUTACION 
+}
+
+
+// Materia //
+model Subject{
+  id          String @id @default(uuid()) @map("id_materia")
+  subject        String @map("materia")
+  categoryID  String @map("id_categoria")
+
+  category    Category @relation(fields: [categoryID], references: [id])
+
+  grades      Grades[]
+
+  @@map("materia")
+}
+
+
+// Calificaciones //
+model Grades{
+  id          String @id @default(uuid()) @map("id_calificaciones")
+  grade       Int @map("calificacion")
+  subjectID   String @map("id_materia")
+  studentID   String @map("id_alumno")
+
+  subject     Subject @relation(fields: [subjectID], references: [id])
+  student   Student @relation(fields: [studentID], references: [id])
+
+  @@map("calificaciones")
+}
+
+
+// CARRERA //
+model Career{
+  id              String @id @defualt(uuid() @map("id_carrera"))
+  name            String @id @map("nombre")
+  studyPlanID     String @map("id_planEstudios")
+  knowledgeAreaID String @map("id_areaConocimiento")
+  isMasters       Boolean @map("esMaestria")
+
+  studyPlan       StudyPlan     @relation(fields: [studyPlanID], references: [id])
+  knowledgeArea   KnowledgeArea @relation(fields: [knowledgeAreaID], references: [id])
+
+  students StudentCareer[]
+
+  @@map("carrera")
+}
+
+// CARRERA_ALUMNO //
+model StudentCareer {
+  id          String  @id @default(uuid()) @map("id_carreraAlumno")
+  careerId    String  @map("id_carrera")
+  studentId   String  @map("id_alumno")
+  isGraduated Boolean @map("esEgresado")
+
+  career  Career  @relation(fields: [careerId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+
+  @@map("carrera_alumno")
 }

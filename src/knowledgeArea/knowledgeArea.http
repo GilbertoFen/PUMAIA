@@ -1,0 +1,10 @@
+###GET
+GET http://localhost:3000/api/knowledge-area
+
+###POST
+POST http://localhost:3000/api/knowledge-area
+Content-Type: application/json
+
+{
+    "area": "CIENCIAS_FISICO_MATEMATICAS_Y_DE_LAS_INGENIERIAS",
+}
