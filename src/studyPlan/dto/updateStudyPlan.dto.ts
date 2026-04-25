@@ -3,9 +3,9 @@ import { IsInt, IsString, IsOptional } from "class-validator"
 export class UpdateStudyPlanDto {
     @IsString()
     @IsOptional()
-    studyPlan?: String
+    studyPlan?: string
     
     @IsInt()
     @IsOptional()
-    semesters?: Number
+    semesters?: number
 }

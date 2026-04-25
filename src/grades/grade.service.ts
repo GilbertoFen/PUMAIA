@@ -13,7 +13,7 @@ export class GradeService {
     //GET
     async getAllGrades() {
         try {
-            return await this.prisma.grade.findMany();
+            return await this.prisma.grades.findMany();
         } catch (error) {
             console.error('ERROR EN GET ALL GRADES:', error);
             throw error;
@@ -22,7 +22,7 @@ export class GradeService {
 
     async getGradeById(id: string) {
         try {
-            return await this.prisma.grade.findUnique({
+            return await this.prisma.grades.findUnique({
                 where: { id },
             });
         } catch (error) {
@@ -34,7 +34,7 @@ export class GradeService {
     //CREATE
     async createGrade(dto: CreateGradeDto) {
         try {
-            return await this.prisma.grade.create({
+            return await this.prisma.grades.create({
                 data: { ...dto },
             });
         } catch (error) {
@@ -46,7 +46,7 @@ export class GradeService {
     //UPDATE
     async updateGrade(id: string, dto: UpdateGradeDto) {
         try {
-            return await this.prisma.grade.update({
+            return await this.prisma.grades.update({
                 where: { id },
                 data: { ...dto },
             });
@@ -59,7 +59,7 @@ export class GradeService {
     //DELETE
     async deleteGrade(id: string){
         try {
-            return await this.prisma.grade.delete({
+            return await this.prisma.grades.delete({
                 where: { id }
             })
         } catch(error){

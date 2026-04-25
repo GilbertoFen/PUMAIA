@@ -1,7 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
 import { StudyPlanService } from './studyPlan.service';
+//Dto's
 import { CreateStudyPlanDto } from './dto/createStudyPlan.dto';
-import { UpdateStudyPlanDto } from './dto/update-studyPlan.dto';
+import { UpdateStudyPlanDto } from './dto/updateStudyPlan.dto';
 
 @Controller('study-plan')
 export class StudyPlanController {

@@ -198,8 +198,8 @@ model Grades{
 
 // CARRERA //
 model Career{
-  id              String @id @defualt(uuid() @map("id_carrera"))
-  name            String @id @map("nombre")
+  id              String @id @default(uuid()) @map("id_carrera")
+  name            String @map("nombre")
   studyPlanID     String @map("id_planEstudios")
   knowledgeAreaID String @map("id_areaConocimiento")
   isMasters       Boolean @map("esMaestria")

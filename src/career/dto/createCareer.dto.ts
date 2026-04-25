@@ -1,4 +1,4 @@
-import { isBoolean, IsString } from 'class-validator';
+import { IsBoolean, IsString } from 'class-validator';
 
 export class CreateCareerDto{
   @IsString()
@@ -10,7 +10,7 @@ export class CreateCareerDto{
   @IsString()
   knowledgeAreaID: string
 
-  @isBoolean()
+  @IsBoolean()
   isMasters: boolean
 
 }
