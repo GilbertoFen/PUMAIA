@@ -1,0 +1,41 @@
+POST http://localhost:3001/api/areas-expertise
+Content-Type: application/json
+
+{
+    "name": "Ciberseguridad"
+}
+
+###
+POST http://localhost:3001/api/professional-experience
+Content-Type: application/json
+
+{
+  "studentId": "bb38538f-5bca-4519-9ded-7cdde19a4a9d",
+  "areaExpertiseId": "e95d269b-18d0-4dd3-b43b-53881c84ed03",
+  "categoryId": "001"
+}
+
+###
+GET http://localhost:3001/api/professional-experience/student/bb38538f-5bca-4519-9ded-7cdde19a4a9d
+###
+GET http://localhost:3001/api/areas-expertise
+###
+DELETE http://localhost:3001/api/areas-expertise/e95d269b-18d0-4dd3-b43b-53881c84ed03
+
+
+###
+DELETE  http://localhost:3001/api/professional-experience/702f3fa5-f5bb-46ae-ab17-9c5f63132aea
+
+###
+POST http://localhost:3001/api/ai-results
+Content-Type: application/json
+
+{
+  "studentId": "1fd55f30-7b92-4fcb-b650-19217392ff7c",
+  "categoryId": "uuid-cat-backend",
+  "optionA": "NestJS", "descriptionA": "Dominio de microservicios",
+  "optionB": "PostgreSQL", "descriptionB": "Manejo de bases relacionales",
+  "optionC": "Docker", "descriptionC": "Contenedores y despliegue",
+  "optionD": "Prisma", "descriptionD": "ORM y query optimization",
+  "optionE": "TypeScript", "descriptionE": "Tipado fuerte y escalabilidad"
+}

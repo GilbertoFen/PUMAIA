@@ -1,0 +1,68 @@
+import { Injectable} from '@nestjs/common';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { CreateContestDto } from './dto/create-contest.dto';
+import { EnrollStudentDto } from './dto/enroll-student.dto';
+import { NotFoundException } from '@nestjs/common/exceptions/not-found.exception';
+@Injectable()
+export class ContestService {
+  constructor(private prisma: PrismaService) { }
+
+  create(dto: CreateContestDto) {
+    return this.prisma.contest.create({
+      data: dto,
+    });
+  }
+
+  async enroll(dto: EnrollStudentDto) {
+    return await this.prisma.studentContest.create({
+      data: {
+        studentId: dto.studentId,
+        contestId: dto.contestId,
+      },
+      include: {
+        contest: true, 
+        student: true,
+      },
+    });
+  }
+
+  async findAll() {
+    return await this.prisma.student.findMany({
+      include: {
+        contests: {
+          include: {
+            contest: true  
+          }
+        },
+        aiResults: true    
+      }
+    });
+  }
+  async findByStudent(studentId: string) {
+    return await this.prisma.studentContest.findMany({
+      where: { studentId },
+      include: {
+        contest: true,
+      },
+    });
+  }
+
+  async findStudentWithContests(accountNumber: number) {
+    const student = await this.prisma.student.findUnique({
+      where: { accountNumber },
+      include: {
+        contests: {
+          include: {
+            contest: true
+          }
+        }
+      }
+    });
+
+    if (!student) {
+      throw new NotFoundException(`No se encontró ningún alumno con la cuenta: ${accountNumber}`);
+    }
+
+    return student;
+  }
+}
