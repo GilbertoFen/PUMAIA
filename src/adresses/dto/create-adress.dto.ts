@@ -3,14 +3,21 @@ import { IsNotEmpty, IsNumber, IsString } from "class-validator";
 export class CreateAdressDto {
     @IsString()
     @IsNotEmpty()
-    street: string;
-    @IsString()
-    @IsNotEmpty()
-    city: string;
-    @IsString()
-    @IsNotEmpty()
-    state: string;
+    calle: string;
+
     @IsNotEmpty()
     @IsNumber()
-    zipCode: number;
+    cp: number;
+
+    @IsString()
+    @IsNotEmpty()
+    coloniaId: string;
+
+    @IsString()
+    @IsNotEmpty()
+    municipioId: string;
+
+    @IsString()
+    @IsNotEmpty()
+    estadoId: string;
 }

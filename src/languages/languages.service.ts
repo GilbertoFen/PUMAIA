@@ -1,26 +1,165 @@
 import { Injectable } from '@nestjs/common';
 import { CreateLanguageDto } from './dto/create-language.dto';
 import { UpdateLanguageDto } from './dto/update-language.dto';
+import { CreateLanguageUserDto } from './dto/create-language-user.dto';
+import { PrismaService } from 'src/prisma.service';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { UpdateLanguageUserDto } from './dto/update-language-user.dto';
 
 @Injectable()
 export class LanguagesService {
-  create(createLanguageDto: CreateLanguageDto) {
-    return 'This action adds a new language';
+  constructor(private prisma: PrismaService) { }
+
+
+  /*
+  POST
+  */
+
+  async createLanguageUser(dto: CreateLanguageUserDto) {
+    // 1. Buscar skill por nivel CEFR
+    const skill = await this.prisma.skill.findUnique({
+      where: { id: dto.skillId },
+    });
+
+    if (!skill) {
+      throw new NotFoundException('Nivel CEFR no encontrado');
+    }
+
+    // 2. Validar que no exista duplicado
+    const existing = await this.prisma.languageUser.findUnique({
+      where: {
+        userId_languageId: {
+          userId: dto.userId,
+          languageId: dto.languageId,
+        },
+      },
+    });
+
+    if (existing) {
+      throw new BadRequestException('El usuario ya tiene este idioma registrado');
+    }
+
+    // 3. Crear relación
+    return this.prisma.languageUser.create({
+      data: {
+        user: {
+          connect: { id: dto.userId },
+        },
+        language: {
+          connect: { id: dto.languageId },
+        },
+        skill: {
+          connect: { id: skill.id },
+        },
+      },
+      include: {
+        language: true,
+        skill: true,
+      },
+    });
   }
 
-  findAll() {
-    return `This action returns all languages`;
+
+  async createLanguage(createLanguageDto: CreateLanguageDto) {
+    try {
+      return this.prisma.language.create({
+        data: {
+          name: createLanguageDto.name,
+        },
+      });
+    }
+    catch (error) {
+      throw new BadRequestException('Error al crear el idioma');
+
+    }
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} language`;
+  /*
+  GET
+  */
+
+
+  findLanguageUsers() {
+    return this.prisma.languageUser.findMany({
+      include: {
+        language: true,
+        skill: true,
+      },
+    });
   }
 
-  update(id: number, updateLanguageDto: UpdateLanguageDto) {
-    return `This action updates a #${id} language`;
+
+  findLanguageUsersByUserId(userId: string) {
+    return this.prisma.languageUser.findMany({
+      where: { userId },
+      include: {
+        language: true,
+        skill: true,
+      },
+    });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} language`;
+  findAllLanguages() {
+    return this.prisma.language.findMany();
+  }
+
+  findOneLanguage(id: string) {
+    return this.prisma.language.findUnique({
+      where: { id },
+    });
+  }
+
+  findLanguageByName(name: string) {
+    return this.prisma.language.findUnique({
+      where: { name },
+    });
+  }
+
+
+  /*
+  UPDATE
+  */
+
+  updateLanguageUser(id: string, dto: UpdateLanguageUserDto) {
+    return this.prisma.languageUser.update({
+      where: { id },
+      data: {
+        userId: dto.userId,
+        languageId: dto.languageId,
+        skillId: dto.skillId,
+      },
+      include: {
+        language: true,
+        skill: true,
+      },
+    });
+  }
+  updateLanguage(id: string, updateLanguageDto: UpdateLanguageDto) {
+    return this.prisma.language.update({
+      where: { id },
+      data: {
+        name: updateLanguageDto.name,
+        certifications: updateLanguageDto.certificationId
+          ? {
+            connect: { id: updateLanguageDto.certificationId },
+          }
+          : undefined,
+      },
+    });
+  }
+
+  /*
+  DELETE
+  */
+
+  removeLanguage(id: string) {
+    return this.prisma.language.delete({
+      where: { id },
+    });
+  }
+  removeLanguageUser(id: string) {
+    return this.prisma.languageUser.delete({
+      where: { id },
+    });
   }
 }

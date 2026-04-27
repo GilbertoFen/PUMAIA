@@ -1,0 +1,150 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id       String @id @default(uuid())
+  email    String @unique
+  name     String
+  noCuenta Int    @unique
+  password String
+
+  addressId String?
+  address   Address? @relation(fields: [addressId], references: [id])
+
+  languages LanguageUser[]
+  courses   CourseUser[]
+  schoolarships SchoolarshipUser[]
+}
+
+model Address {
+  id    String  @id @default(uuid())
+  calle String?
+  cp    Int
+
+  coloniaId String
+  colonia   Colonia @relation(fields: [coloniaId], references: [id])
+
+  municipioId String
+  municipio   Municipio @relation(fields: [municipioId], references: [id])
+
+  estadoId String
+  estado   Estado @relation(fields: [estadoId], references: [id])
+
+  users User[]
+}
+
+model Estado {
+  id        String    @id @default(uuid())
+  name      String
+  addresses Address[]
+}
+
+model Colonia {
+  id        String    @id @default(uuid())
+  name      String
+  addresses Address[]
+}
+
+model Municipio {
+  id        String    @id @default(uuid())
+  name      String
+  addresses Address[]
+}
+
+model LanguageUser {
+  id         String @id @default(uuid())
+  userId     String
+  languageId String
+  skillId    String
+
+  user     User     @relation(fields: [userId], references: [id])
+  language Language @relation(fields: [languageId], references: [id])
+  skill    Skill    @relation(fields: [skillId], references: [id])
+
+  @@unique([userId, languageId])
+}
+
+model Skill {
+  id          String @id @default(uuid())
+  proficiency String @unique
+
+  languageUsers LanguageUser[]
+}
+
+model Language {
+  id   String @id @default(uuid())
+  name String @unique
+
+  certifications Certification[]
+  languageUsers  LanguageUser[]
+}
+
+model Certification {
+  id         String @id @default(uuid())
+  name       String
+  languageId String
+
+  language Language @relation(fields: [languageId], references: [id])
+}
+
+model Category {
+  id   String @id @default(uuid())
+  name String @unique
+
+  courses Course[]
+  schoolarships Schoolarship[]
+}
+
+model CourseUser {
+  id       String @id @default(uuid())
+  userId   String
+  courseId String
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  @@unique([userId, courseId])
+}
+
+model Course {
+  id   String @id @default(uuid())
+  name String
+  categoryId String
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  courseUsers CourseUser[]
+}
+
+model SchoolarshipUser {
+  id             String @id @default(uuid())
+  userId         String
+  schoolarshipId String
+
+  user         User         @relation(fields: [userId], references: [id])
+  schoolarship Schoolarship @relation(fields: [schoolarshipId], references: [id])
+
+  @@unique([userId, schoolarshipId])
+}
+
+model Schoolarship {
+  id          String @id @default(uuid())
+  name        String
+  categoryId  String
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  schoolarshipUsers SchoolarshipUser[]
+}
