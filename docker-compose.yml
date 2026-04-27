@@ -1,16 +1,15 @@
 version: '3.8'
-
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: db_postgres
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
     environment:
-      POSTGRES_USER: federico
-      POSTGRES_PASSWORD: federicocrack
-      POSTGRES_DB: puma_db
+      POSTGRES_USER: raciel
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: nestdb
     ports:
-      - "5440:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - "5499:5432"
+
 volumes:
-  postgres_data:
+  db_data:

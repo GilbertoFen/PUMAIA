@@ -1,38 +1,80 @@
 import { Injectable } from '@nestjs/common';
 import { CreateAdressDto } from './dto/create-adress.dto';
 import { UpdateAdressDto } from './dto/update-adress.dto';
-import { Adress } from './entities/adress.entity';
-import { v4 as uuidv4 } from 'uuid';
-
+import { PrismaService } from 'src/prisma.service';
+import { CreateEstadoDto } from './dto/create-estado.dto';
+import { UpdateSpecDto } from './dto/update-estado.dto';
 
 @Injectable()
 export class AdressesService {
-  private adresses: Adress[] = [];
-  create(createAdressDto: CreateAdressDto) {
-    const newAdress = {
-      id: uuidv4(),
-      street: createAdressDto.street,
-      city: createAdressDto.city,
-      state: createAdressDto.state,
-      zipCode: createAdressDto.zipCode,
-    };
-    this.adresses.push(newAdress);
-    return newAdress;
+
+  constructor(private prisma: PrismaService) { }
+
+
+  //CREATE
+  async create(data: CreateAdressDto) {
+    return this.prisma.address.create({ data });
   }
 
-  findAll() {
-    return this.adresses;
+  async createEstado(createEstadoDto: CreateEstadoDto) {
+    return this.prisma.estado.create({
+      data: { name: createEstadoDto.name },
+    });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} adress`;
+  async createMunicipio(data: CreateEstadoDto) {
+    return this.prisma.municipio.create({ data });
   }
 
-  update(id: number, updateAdressDto: UpdateAdressDto) {
-    return `This action updates a #${id} adress`;
+  async createColonia(data: CreateEstadoDto) {
+    return this.prisma.colonia.create({ data });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} adress`;
+  //GET
+  async findAllEstados() {
+    return this.prisma.estado.findMany();
+  }
+  async findEstadoById(id: string) {
+    return this.prisma.estado.findUnique({ where: { id } });
+  }
+  async findAllMunicipios() {
+    return this.prisma.municipio.findMany();
+  }
+  async findMunicipioById(id: string) {
+    return this.prisma.municipio.findUnique({ where: { id } });
+  }
+  async findAllColonias() {
+    return this.prisma.colonia.findMany();
+  }
+  async findColoniaById(id: string) {
+    return this.prisma.colonia.findUnique({ where: { id } });
+  }
+
+  async findAll() {
+    return this.prisma.address.findMany();
+  }
+
+  findOne(id: string) {
+    return this.prisma.address.findUnique({ where: { id } });
+  }
+
+  //UPDATE
+  update(id: string, updateAdressDto: UpdateAdressDto) {
+    return this.prisma.address.update({ where: { id }, data: updateAdressDto });
+  }
+
+  updateEstado(id: string, updateEstadoDto: UpdateSpecDto) {
+    return this.prisma.estado.update({ where: { id }, data: { name: updateEstadoDto.name } });
+  }
+  updateMunicipio(id: string, updateEstadoDto: UpdateSpecDto) {
+    return this.prisma.municipio.update({ where: { id }, data: { name: updateEstadoDto.name } });
+  }
+  updateColonia(id: string, updateEstadoDto: UpdateSpecDto) {
+    return this.prisma.colonia.update({ where: { id }, data: { name: updateEstadoDto.name } });
+  }
+
+  //DELETE
+  remove(id: string) {
+    return this.prisma.address.delete({ where: { id } });
   }
 }
