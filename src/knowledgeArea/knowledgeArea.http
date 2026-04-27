@@ -1,0 +1,10 @@
+###GET
+GET http://localhost:3001/api/knowledge-area
+
+###POST
+POST http://localhost:3001/api/knowledge-area
+Content-Type: application/json
+
+{
+    "knowledgeArea": "CIENCIAS_SOCIALES"
+}

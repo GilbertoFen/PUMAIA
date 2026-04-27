@@ -1,0 +1,31 @@
+POST http://localhost:3001/api/ai-category
+Content-Type: application/json
+
+{
+    "name": "Carrera Profesional"
+}
+
+###
+POST http://localhost:3001/api/ai-result
+Content-Type: application/json
+
+{
+  "studentId": "1fd55f30-7b92-4fcb-b650-19217392ff7c",
+  "categoryId": "11170c9f-f5e3-4a66-a546-aa2d59883336",
+  "optionA": "Microservicios",
+  "descriptionA": "Dominas la orquestación con NestJS",
+  "optionB": "Serverless",
+  "descriptionB": "Eres apto para AWS Lambda",
+  "optionC": "Monolitos modulares",
+  "descriptionC": "Excelente para proyectos medianos",
+  "optionD": "DevOps",
+  "descriptionD": "Conocimiento en Docker y CI/CD",
+  "optionE": "DB Admin",
+  "descriptionE": "Experto en optimización de queries"
+}
+
+###
+GET http://localhost:3001/api/ai-result/student/1fd55f30-7b92-4fcb-b650-19217392ff7c
+
+###
+DELETE http://localhost:3001/api/ai-result/db4b2afb-e078-4453-9bba-dc949862ecb5

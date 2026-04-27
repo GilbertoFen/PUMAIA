@@ -1,0 +1,19 @@
+### POST 
+POST http://localhost:3001/api/students
+Content-Type: application/json
+
+{
+  "accountNumber": 321191300,
+  "name": "JOAQUIN RACIEL",
+  "lastNameP": "RESENDIZ",
+  "lastNameM": "RODRIGUEZ",
+  "interest": "BELGICA",
+  "currentSemester": 6,
+  "average": 9.2
+}
+
+### GET 
+GET http://localhost:3001/api/students
+
+###
+GET http://localhost:3001/api/students/321191311
