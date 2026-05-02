@@ -1,0 +1,9 @@
+POST http://localhost:3001/api/career
+Content-Type: application/json
+
+{
+    "name":"Matemáticas aplicadas y computación.",
+    "studyPlanID" : "f3418143-1f16-4d5b-b45d-599e75a6325b",
+    "knowledgeAreaID" : "78dc0f00-4b00-4ecc-920a-b88e07f6e1a0",
+    "isMasters" : true
+}

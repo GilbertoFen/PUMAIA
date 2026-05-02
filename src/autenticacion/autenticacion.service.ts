@@ -8,7 +8,8 @@ import { StudentsService } from 'src/students/students.service';
 type AutenticacionResult = {
   accessToken: string;
   userId: string;
-  email: string;
+  accountNumber: number;
+  name: string;
 }
 
 
@@ -26,19 +27,20 @@ export class AutenticacionService {
 
     const payload = {
       userId: student.id,
-      username: student.email,
+      name: student.name,
       accountNumber:student.accountNumber,
     };
 
     return {
       accessToken: this.JwtService.sign(payload),
       userId: student.id,
-      email: student.email,
+      accountNumber: student.accountNumber,
+      name: student.name
     }
   }
 
   async validarStudent(input: CreateAutenticacionDto): Promise<any> {
-    const student = await this.studentsService.findByEmail(input.email);
+    const student = await this.studentsService.findByAccountNumber(input.accountNumber);
 
     console.log('Alumno encontrado:', student);
 
