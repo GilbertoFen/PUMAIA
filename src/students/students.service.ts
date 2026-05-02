@@ -31,9 +31,18 @@ export class StudentsService {
         }
     }
     async findByAccountNumber(accountNumber: number) {
-        return await this.prisma.student.findUnique({
-            where: { accountNumber }
+        const result =  await this.prisma.student.findUnique({
+            where: { accountNumber },
+            include:{
+                careers:{
+                    include:{
+                        career:true
+                    }
+                }
+            }
         });
+        console.log('Resultado de Prisma:', JSON.stringify(result, null, 2));
+        return result;
     }
 
     async findByEmail(email: string) {

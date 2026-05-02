@@ -37,22 +37,25 @@ export class StudentsController {
     };
   }
 
-  @Get(':accountNumber')
+  @Get('account/:accountNumber')
   async findOne(@Param('accountNumber') accountNumber: string) {
     const student = await this.service.findByAccountNumber(parseInt(accountNumber));
     
     if (!student) throw new NotFoundException('Alumno no encontrado');
+    const career = student.careers?.[0]?.career?.name || 'Carrera no asignada';
 
      return {
       accountNumber: student.accountNumber,
       fullName: `${student.name} ${student.lastNameP} ${student.lastNameM}`.toUpperCase(),
       academicInfo: {
         semester: student.currentSemester,
-        average: student.average
+        average: student.average,
+        career: career
       },
       interest: student.interest
     };
   }
+
 
   @Post()
   async create(@Body() dto: CreateStudentDto) {
@@ -70,4 +73,5 @@ export class StudentsController {
   async removeContest(@Param('relationId') id: string) {
     return await this.service.removeContest(id);
   }
+  
 }

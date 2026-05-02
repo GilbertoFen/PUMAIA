@@ -23,7 +23,7 @@ Content-Type: application/json
 }
 
 ### GET 
-GET http://localhost:3001/api/students
+GET http://localhost:3001/api/students/32@pcpuma.acatlan.com
 
 ###
-GET http://localhost:3001/api/students/321191311
+GET http://localhost:3001/api/students/account/321191300
