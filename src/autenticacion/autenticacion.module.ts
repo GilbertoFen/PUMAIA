@@ -3,14 +3,17 @@ import { AutenticacionService } from './autenticacion.service';
 import { AutenticacionController } from './autenticacion.controller';
 import { AlumnosModule } from 'src/alumnos/alumnos.module';
 import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
+import {JwtStrategy} from './jwt.strategy';
 import { ConfigService } from '@nestjs/config';
+import { StudentsModule } from 'src/students/students.module';
 
 @Module({
   controllers: [AutenticacionController],
-  providers: [AutenticacionService],
+  providers: [AutenticacionService, JwtStrategy],
   imports: [
-    AlumnosModule,
-    
+    StudentsModule,
+    PassportModule, 
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({

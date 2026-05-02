@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateStudentDto } from './dto/create-student.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class StudentsService {
@@ -20,9 +21,9 @@ export class StudentsService {
 
     async create(dto: CreateStudentDto) {
         try {
-            console.log('1. Entrando al servicio Prisma...');
-            const result = await this.prisma.student.create({ data: dto });
-            console.log('2. Resultado de Prisma:', result);
+            const salt = await bcrypt.genSalt();
+            const hashedPassword = await bcrypt.hash(dto.password, salt);
+            const result = await this.prisma.student.create({ data: {...dto, password: hashedPassword }});
             return result;
         } catch (error) {
             console.error('ERROR EN PRISMA:', error);
@@ -32,6 +33,12 @@ export class StudentsService {
     async findByAccountNumber(accountNumber: number) {
         return await this.prisma.student.findUnique({
             where: { accountNumber }
+        });
+    }
+
+    async findByEmail(email: string) {
+        return await this.prisma.student.findUnique({
+            where: { email }
         });
     }
 

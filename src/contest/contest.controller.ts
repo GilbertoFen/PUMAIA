@@ -1,13 +1,18 @@
-import { Controller, Body, Get, Post, Param } from '@nestjs/common';
+import { Controller, Body, Get, Post, Param, UseGuards, Req } from '@nestjs/common';
 import { ContestService } from './contest.service';
 import { CreateContestDto } from './dto/create-contest.dto';
 import { EnrollStudentDto } from './dto/enroll-student.dto';
+import { AuthGuard } from '@nestjs/passport';
+
 @Controller('contests')
 export class ContestController {
   constructor(private service: ContestService) { }
+  @UseGuards(AuthGuard('jwt')) 
 
   @Post()
-  create(@Body() dto: CreateContestDto) {
+  create(@Body() dto: CreateContestDto, @Req() req) {
+    const userId = req.user.id;
+    console.log("id del usuario :", userId);
     return this.service.create(dto);
   }
   @Post('enroll')
@@ -35,7 +40,7 @@ export class ContestController {
       }))
     };
   }
-
+  @UseGuards(AuthGuard('jwt'))
   @Get()
   findAll() {
     return this.service.findAll();

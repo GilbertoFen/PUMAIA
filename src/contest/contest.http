@@ -3,7 +3,7 @@ Content-Type: application/json
 
 {
     "name":"Hackaton NESTJS",
-    "categoryId": "2"
+    "categoryId": "72dcb4f6-065e-4420-acfd-793a132ac988"
 }
 ###
 POST http://localhost:3001/api/contests/enroll

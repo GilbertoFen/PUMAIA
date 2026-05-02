@@ -4,9 +4,7 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
-  moduleFormat = "cjs"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -21,10 +19,12 @@ model Student {
   name            String           @map("nombre")
   lastNameP       String           @map("apellidoP")
   lastNameM       String           @map("apellidoM")
-  interest        String?           @map("interes")
+  interest        String?          @map("interes")
   currentSemester Int              @map("semestreAct")
   average         Int              @map("promedio")
   locationId      String?          @map("id_ubicacion")
+  email           String           @unique @map("correo")
+  password        String           @map("contraseña")
 
   aiResults       AIResult[]
   // ESTO ES NUEVO: Relación con la tabla intermedia
@@ -90,6 +90,7 @@ model ProfessionalExperience {
   // RELACIONES
   student       Student       @relation(fields: [studentId], references: [id])
   areaExpertise AreaExpertise @relation(fields: [areaExpertiseId], references: [id])
+  category      Category      @relation(fields: [categoryId], references: [id])
 
   @@map("experiencia_profesional")
 }
@@ -100,6 +101,8 @@ model Contest {
   categoryId String           @map("id_categoria")
   
   students   StudentContest[]
+  category      Category      @relation(fields: [categoryId], references: [id])
+
 
   @@map("concurso")
 }
@@ -152,6 +155,8 @@ model Category{
   subjects Subject[]
   courses Course[]
   schoolarships Schoolarship[]
+  experiences  ProfessionalExperience[]
+  contests     Contest[]
 
   @@map("categorias")
 }

@@ -22,6 +22,21 @@ export class StudentsController {
       interest: student.interest
     }));
   }
+  @Get(':email')
+  async findByEmail(@Param('email') email: string){
+    const student = await this.service.findByEmail(email);
+    if (!student) throw new NotFoundException('Alumno no encontrado');
+    return {
+      accountNumber: student.accountNumber,
+      fullName: `${student.name} ${student.lastNameP} ${student.lastNameM}`.toUpperCase(),
+      academicInfo: {
+        semester: student.currentSemester,
+        average: student.average
+      },
+      interest: student.interest
+    };
+  }
+
   @Get(':accountNumber')
   async findOne(@Param('accountNumber') accountNumber: string) {
     const student = await this.service.findByAccountNumber(parseInt(accountNumber));

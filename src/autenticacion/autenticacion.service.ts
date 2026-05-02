@@ -3,6 +3,7 @@ import { CreateAutenticacionDto } from './dto/create-autenticacion.dto';
 import { AlumnosService } from 'src/alumnos/alumnos.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import { StudentsService } from 'src/students/students.service';
 
 type AutenticacionResult = {
   accessToken: string;
@@ -13,42 +14,41 @@ type AutenticacionResult = {
 
 @Injectable()
 export class AutenticacionService {
-  constructor(private alumnosService: AlumnosService,
+  constructor(private studentsService: StudentsService,
     private JwtService: JwtService
   ) { }
 
   async autenticar(input: CreateAutenticacionDto): Promise<AutenticacionResult> {
-    const alumno = await this.validarAlumno(input);
-    if (!alumno) {
+    const student = await this.validarStudent(input);
+    if (!student) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
     const payload = {
-      userId: alumno.id,
-      username: alumno.email,
+      userId: student.id,
+      username: student.email,
+      accountNumber:student.accountNumber,
     };
 
     return {
       accessToken: this.JwtService.sign(payload),
-      userId: alumno.id,
-      email: alumno.email,
+      userId: student.id,
+      email: student.email,
     }
   }
 
-  async validarAlumno(input: CreateAutenticacionDto): Promise<any> {
-    const alumno = await this.alumnosService.findUserByEmail(input.email);
+  async validarStudent(input: CreateAutenticacionDto): Promise<any> {
+    const student = await this.studentsService.findByEmail(input.email);
 
-    console.log('Alumno encontrado:', alumno);
+    console.log('Alumno encontrado:', student);
 
-    if (!alumno) return null;
+    if (!student) return null;
 
-    const isMatch = await bcrypt.compare(input.password, alumno.password);
+    const isMatch = await bcrypt.compare(input.password, student.password);
 
-    if (!isMatch) return null;
+    if (!isMatch) return null;    
 
-    
-
-    const { password, ...result } = alumno;
+    const { password, ...result } = student;
     return result;
   }
 }

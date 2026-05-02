@@ -7,9 +7,19 @@ Content-Type: application/json
   "name": "JOAQUIN RACIEL",
   "lastNameP": "RESENDIZ",
   "lastNameM": "RODRIGUEZ",
-  "interest": "BELGICA",
+  "interest": "GÜERAS",
   "currentSemester": 6,
-  "average": 9.2
+  "average": 9.2,
+  "email": "32@pcpuma.acatlan.com",
+  "password": "12345678"
+}
+###
+POST http://localhost:3001/api/autenticacion/login
+Content-Type: application/json
+
+{
+  "email": "32@pcpuma.acatlan.com",
+  "password": "12345678"
 }
 
 ### GET 
