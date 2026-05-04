@@ -6,5 +6,5 @@ export class CreateSchoolarshipUsersDto {
     schoolarshipId: string;
     @IsNotEmpty()
     @IsUUID()
-    userId: string;
+    studentId: string;
 }

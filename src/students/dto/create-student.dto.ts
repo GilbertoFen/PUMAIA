@@ -40,4 +40,7 @@ export class CreateStudentDto {
   @IsString()
   @IsNotEmpty()
   password: string;
+
+  @IsString()
+  addressId : string;
 }

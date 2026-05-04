@@ -8,7 +8,7 @@ import { UpdateGradeDto } from './dto/updateGrade.dto';
 @Injectable()
 export class GradeService {
 
-    constructor(private prisma: PrismaService) {}
+    constructor(private prisma: PrismaService) { }
 
     //GET
     async getAllGrades() {
@@ -35,7 +35,15 @@ export class GradeService {
     async createGrade(dto: CreateGradeDto) {
         try {
             return await this.prisma.grades.create({
-                data: { ...dto },
+                data: {
+                    grade: dto.grade,
+                    subject: {
+                        connect: { id: dto.subjectID },
+                    },
+                    student: {
+                        connect: { id: dto.studentID },
+                    },
+                },
             });
         } catch (error) {
             console.error('ERROR EN CREATE GRADE:', error);
@@ -48,7 +56,15 @@ export class GradeService {
         try {
             return await this.prisma.grades.update({
                 where: { id },
-                data: { ...dto },
+                data: {
+                    grade: dto.grade,
+                    subject: {
+                        connect: { id: dto.subjectID },
+                    },
+                    student: {
+                        connect: { id: dto.studentID },
+                    },
+                },
             });
         } catch (error) {
             console.error('ERROR EN UPDATE GRADE:', error);
@@ -57,12 +73,12 @@ export class GradeService {
     }
 
     //DELETE
-    async deleteGrade(id: string){
+    async deleteGrade(id: string) {
         try {
             return await this.prisma.grades.delete({
                 where: { id }
             })
-        } catch(error){
+        } catch (error) {
             console.error('ERROR EN DELETE GRADE:', error);
             throw error;
         }

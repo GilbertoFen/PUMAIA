@@ -20,23 +20,31 @@ export class StudentsService {
     }
 
     async create(dto: CreateStudentDto) {
-        try {
-            const salt = await bcrypt.genSalt();
-            const hashedPassword = await bcrypt.hash(dto.password, salt);
-            const result = await this.prisma.student.create({ data: {...dto, password: hashedPassword }});
-            return result;
-        } catch (error) {
-            console.error('ERROR EN PRISMA:', error);
-            throw error;
-        }
+        const salt = await bcrypt.genSalt();
+        const hashedPassword = await bcrypt.hash(dto.password, salt);
+
+        return this.prisma.student.create({
+            data: {
+                accountNumber: dto.accountNumber,
+                name: dto.name,
+                lastNameP: dto.lastNameP,
+                lastNameM: dto.lastNameM,
+                interest: dto.interest,
+                currentSemester: dto.currentSemester,
+                average: dto.average,
+                email: dto.email,
+                password: hashedPassword,
+                addressId: dto.addressId,
+            }
+        });
     }
     async findByAccountNumber(accountNumber: number) {
-        const result =  await this.prisma.student.findUnique({
+        const result = await this.prisma.student.findUnique({
             where: { accountNumber },
-            include:{
-                careers:{
-                    include:{
-                        career:true
+            include: {
+                careers: {
+                    include: {
+                        career: true
                     }
                 }
             }
@@ -59,7 +67,7 @@ export class StudentsService {
                     studentId: studentId,
                     contestId: contestId,
                 },
-                 include: {
+                include: {
                     contest: true
                 }
             });

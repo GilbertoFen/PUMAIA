@@ -3,7 +3,7 @@ import { CefrLevel } from 'src/common/enums/cefr-level.enum';
 
 export class CreateLanguageUserDto {
   @IsUUID()
-  userId: string;
+  studentId: string;
 
   @IsUUID()
   languageId: string;

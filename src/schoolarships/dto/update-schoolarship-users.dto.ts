@@ -5,5 +5,5 @@ export class UpdateSchoolarshipUserDto extends PartialType(CreateSchoolarshipUse
 
     schoolarshipId: string;
 
-    userId: string;
+    studentId: string;
 }

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CreateLanguageDto } from './dto/create-language.dto';
 import { UpdateLanguageDto } from './dto/update-language.dto';
 import { CreateLanguageUserDto } from './dto/create-language-user.dto';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { UpdateLanguageUserDto } from './dto/update-language-user.dto';
 
@@ -26,10 +26,10 @@ export class LanguagesService {
     }
 
     // 2. Validar que no exista duplicado
-    const existing = await this.prisma.languageUser.findUnique({
+    const existing = await this.prisma.studentLanguage.findUnique({
       where: {
-        userId_languageId: {
-          userId: dto.userId,
+        studentId_languageId: {
+          studentId: dto.studentId,
           languageId: dto.languageId,
         },
       },
@@ -40,10 +40,10 @@ export class LanguagesService {
     }
 
     // 3. Crear relación
-    return this.prisma.languageUser.create({
+    return this.prisma.studentLanguage.create({
       data: {
-        user: {
-          connect: { id: dto.userId },
+        student: {
+          connect: { id: dto.studentId },
         },
         language: {
           connect: { id: dto.languageId },
@@ -80,7 +80,7 @@ export class LanguagesService {
 
 
   findLanguageUsers() {
-    return this.prisma.languageUser.findMany({
+    return this.prisma.studentLanguage.findMany({
       include: {
         language: true,
         skill: true,
@@ -89,9 +89,9 @@ export class LanguagesService {
   }
 
 
-  findLanguageUsersByUserId(userId: string) {
-    return this.prisma.languageUser.findMany({
-      where: { userId },
+  findLanguageUsersByUserId(studentId: string) {
+    return this.prisma.studentLanguage.findMany({
+      where: { studentId },
       include: {
         language: true,
         skill: true,
@@ -121,10 +121,10 @@ export class LanguagesService {
   */
 
   updateLanguageUser(id: string, dto: UpdateLanguageUserDto) {
-    return this.prisma.languageUser.update({
+    return this.prisma.studentLanguage.update({
       where: { id },
       data: {
-        userId: dto.userId,
+        studentId: dto.studentId,
         languageId: dto.languageId,
         skillId: dto.skillId,
       },
@@ -158,7 +158,7 @@ export class LanguagesService {
     });
   }
   removeLanguageUser(id: string) {
-    return this.prisma.languageUser.delete({
+    return this.prisma.studentLanguage.delete({
       where: { id },
     });
   }

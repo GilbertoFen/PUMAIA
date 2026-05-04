@@ -28,7 +28,6 @@ import { StudentCareerModule } from './students-career/studentCareer.module';
 //RACIEL
 //import { AppController } from './app.controller';
 //import { AppService } from './app.service';
-import { AlumnosModule } from './alumnos/alumnos.module';
 import { AdressesModule } from './adresses/adresses.module';
 import { LanguagesModule } from './languages/languages.module';
 import { AutenticacionModule } from './autenticacion/autenticacion.module';
@@ -61,8 +60,7 @@ import { CoursesModule } from './courses/courses.module';
     GradeModule,
     CareerModule,
     StudentCareerModule,
-
-    AlumnosModule, 
+ 
     AdressesModule, 
     LanguagesModule, 
     AutenticacionModule, 

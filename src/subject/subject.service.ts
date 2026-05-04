@@ -9,7 +9,7 @@ import { UpdateSubjectDto } from './dto/updateSubject.dto';
 @Injectable()
 export class SubjectService {
 
-    constructor(private prisma: PrismaService) {}
+    constructor(private prisma: PrismaService) { }
 
     //GET
     async getAllSubjects() {
@@ -36,7 +36,12 @@ export class SubjectService {
     async createSubject(dto: CreateSubjectDto) {
         try {
             return await this.prisma.subject.create({
-                data: { ...dto },
+                data: {
+                    subject: dto.subject,
+                    category: {
+                        connect: { id: dto.categoryID },
+                    },
+                },
             });
         } catch (error) {
             console.error('ERROR EN CREATE SUBJECT:', error);
@@ -49,7 +54,12 @@ export class SubjectService {
         try {
             return await this.prisma.subject.update({
                 where: { id },
-                data: { ...dto },
+                data: {
+                    subject: dto.subject,
+                    category: {
+                        connect: { id: dto.categoryID },
+                    },
+                },
             });
         } catch (error) {
             console.error('ERROR EN UPDATE SUBJECT:', error);
@@ -58,12 +68,12 @@ export class SubjectService {
     }
 
     //DELETE
-    async deleteSubject(id: string){
+    async deleteSubject(id: string) {
         try {
             return await this.prisma.subject.delete({
                 where: { id }
             })
-        } catch(error){
+        } catch (error) {
             console.error('ERROR EN DELETE SUBJECT:', error);
             throw error;
         }

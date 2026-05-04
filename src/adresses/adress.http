@@ -1,0 +1,40 @@
+POST http://localhost:3001/api/addresses
+Content-Type: application/json
+
+{
+    "calle" : "Av del chutazo",
+    "cp": 123456,
+    "coloniaId" : "ddc35de0-5108-4e4d-89f2-1782d0b24eae",
+    "municipioId" : "174b6a58-9269-453f-808b-413727217401",
+    "estadoId" : "cec0b40d-ab3c-43f9-a056-786d4f58fef3"
+}
+
+###
+POST http://localhost:3001/api/addresses/estado
+Content-Type: application/json
+
+{
+    "name": "Chiapas"
+}
+POST http://localhost:3001/api/addresses/estado
+Content-Type: application/json
+
+{
+    "name": "Chiapas"
+}
+
+###
+POST http://localhost:3001/api/addresses/estado/cec0b40d-ab3c-43f9-a056-786d4f58fef3/municipio
+Content-Type: application/json
+
+{
+    "name": "Chiapas De San Bartolo"
+}
+
+###
+POST http://localhost:3001/api/addresses/municipio/174b6a58-9269-453f-808b-413727217401/colonia
+Content-Type: application/json
+
+{
+    "name": "Tolantongo"
+}

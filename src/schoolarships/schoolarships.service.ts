@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { CreateSchoolarshipDto } from './dto/create-schoolarship.dto';
 import { UpdateSchoolarshipDto } from './dto/update-schoolarship.dto';
 import { CreateSchoolarshipUsersDto } from './dto/create-schoolarship-users.dto';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateSchoolarshipUserDto } from './dto/update-schoolarship-users.dto';
 
 @Injectable()
@@ -35,17 +35,17 @@ export class SchoolarshipsService {
         throw new Error('Beca no encontrada');
       }
 
-      const user = await this.prisma.user.findUnique({
-        where: { id: schoolarshipUserDto.userId }
+      const user = await this.prisma.student.findUnique({
+        where: { id: schoolarshipUserDto.studentId }
       });
       if (!user) {
         throw new Error('Usuario no encontrado');
       }
 
-      return this.prisma.schoolarshipUser.create({
+      return this.prisma.studentSchoolarship.create({
         data: {
           schoolarshipId: schoolarshipUserDto.schoolarshipId,
-          userId: schoolarshipUserDto.userId
+          studentId: schoolarshipUserDto.studentId
         }
       });
     } catch (error) {
@@ -71,9 +71,9 @@ export class SchoolarshipsService {
   }
 
   findSchoolarshipUsers(schoolarshipId: string) {
-    return this.prisma.schoolarshipUser.findMany({
+    return this.prisma.studentSchoolarship.findMany({
       where: { schoolarshipId },
-      include: { user: true }
+      include: { student: true }
     });
   }
 
@@ -85,11 +85,11 @@ export class SchoolarshipsService {
   }
 
   updateSchoolarshipUser(schoolarshipUserId: string, updateSchoolarshipUserDto: UpdateSchoolarshipUserDto) {
-    return this.prisma.schoolarshipUser.update({
+    return this.prisma.studentSchoolarship.update({
       where: { id: schoolarshipUserId },
       data: {
         schoolarshipId: updateSchoolarshipUserDto.schoolarshipId,
-        userId: updateSchoolarshipUserDto.userId
+        studentId: updateSchoolarshipUserDto.studentId
       }
     });
   }
@@ -100,7 +100,7 @@ export class SchoolarshipsService {
     });
   }
   removeSchoolarshipUser(schoolarshipUserId: string) {
-    return this.prisma.schoolarshipUser.delete({
+    return this.prisma.studentSchoolarship.delete({
       where: { id: schoolarshipUserId }
     });
   }

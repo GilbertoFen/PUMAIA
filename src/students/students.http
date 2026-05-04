@@ -3,15 +3,16 @@ POST http://localhost:3001/api/students
 Content-Type: application/json
 
 {
-  "accountNumber": 321191300,
-  "name": "JOAQUIN RACIEL",
-  "lastNameP": "RESENDIZ",
-  "lastNameM": "RODRIGUEZ",
-  "interest": "GÜERAS",
+  "accountNumber": 100000,
+  "name": "JOSE EMMANUEL",
+  "lastNameP": "ISLAS",
+  "lastNameM": "ROMERO",
+  "interest": "MONICA",
   "currentSemester": 6,
-  "average": 9.2,
-  "email": "32@pcpuma.acatlan.com",
-  "password": "12345678"
+  "average": 9.0,
+  "email": "30@pcpuma.acatlan.com",
+  "password": "12345678",
+  "addressId" : "eff45f0c-599f-46a7-b83d-2fc89c53d2b0"
 }
 ###
 POST http://localhost:3001/api/autenticacion/login
