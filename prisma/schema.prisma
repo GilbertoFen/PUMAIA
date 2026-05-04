@@ -1,225 +1,220 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
-  moduleFormat = "cjs"
+  provider        = "prisma-client-js"
+  previewFeatures = ["views"]
 }
 
 datasource db {
   provider = "postgresql"
 }
 
-//  ALUMNO 
-
+// ALUMNO
 model Student {
-  id              String           @id @default(uuid()) @map("id_alumno")
-  accountNumber   Int              @unique @map("numeroCuenta") 
-  name            String           @map("nombre")
-  lastNameP       String           @map("apellidoP")
-  lastNameM       String           @map("apellidoM")
-  interest        String?           @map("interes")
-  currentSemester Int              @map("semestreAct")
-  average         Int              @map("promedio")
-  locationId      String?          @map("id_ubicacion")
+  id              String  @id @default(uuid()) @map("id_alumno")
+  accountNumber   Int     @unique @map("numero_cuenta")
+  name            String  @map("nombre")
+  lastNameP       String  @map("apellido_paterno")
+  lastNameM       String  @map("apellido_materno")
+  interest        String? @map("interes")
+  currentSemester Int     @map("semestre_actual")
+  average         Int     @map("promedio")
+  email           String  @unique @map("correo")
+  password        String  @map("contrasena")
+  addressId       String? @map("id_direccion")
 
-  aiResults       AIResult[]
-  // ESTO ES NUEVO: Relación con la tabla intermedia
-  contests        StudentContest[] 
-  experiences     ProfessionalExperience[]
-  grades          Grades[]
-  careers StudentCareer[]
+  address       Address?              @relation(fields: [addressId], references: [id])
+  aiResults     AIResult[]
+  contests      StudentContest[]
+  experiences   ProfessionalExperience[]
+  grades        Grades[]
+  careers       StudentCareer[]
+  languages     StudentLanguage[]
+  courses       StudentCourse[]
+  schoolarships StudentSchoolarship[]
 
   @@map("alumno")
 }
 
-//  CATEGORIAIA 
+// CATEGORIA IA
 model AICategory {
-  id    String @id @default(uuid()) @map("id_categoriaIA")
-  name  String @map("nombre") // Ej: "Desarrollo", "Seguridad", "Data"
+  id   String @id @default(uuid()) @map("id_categoria_ia")
+  name String @map("nombre")
 
   results AIResult[]
 
   @@map("categoria_ia")
 }
-//  RESULTADO IA 
+
+// RESULTADO IA
 model AIResult {
-  id           String @id @default(uuid()) @map("id_resultadoIA")
-  
-  // Campos de la simulación de IA
-  optionA      String @map("opcionA")
-  descriptionA String @map("descripcionA")
-  optionB      String @map("opcionB")
-  descriptionB String @map("descripcionB")
-  optionC      String @map("opcionC")
-  descriptionC String @map("descripcionC")
-  optionD      String @map("opcionD")
-  descriptionD String @map("descripcionD")
-  optionE      String @map("opcionE")
-  descriptionE String @map("descripcionE")
-
-  // Llaves foráneas
+  id           String @id @default(uuid()) @map("id_resultado_ia")
+  optionA      String @map("opcion_a")
+  descriptionA String @map("descripcion_a")
+  optionB      String @map("opcion_b")
+  descriptionB String @map("descripcion_b")
+  optionC      String @map("opcion_c")
+  descriptionC String @map("descripcion_c")
+  optionD      String @map("opcion_d")
+  descriptionD String @map("descripcion_d")
+  optionE      String @map("opcion_e")
+  descriptionE String @map("descripcion_e")
   studentId    String @map("id_alumno")
-  categoryId   String @map("id_categoriaIA")
+  categoryId   String @map("id_categoria_ia")
 
-  // Relaciones lógicas (Puentes de Prisma)
-  student      Student    @relation(fields: [studentId], references: [id])
-  category     AICategory @relation(fields: [categoryId], references: [id])
+  student  Student    @relation(fields: [studentId], references: [id])
+  category AICategory @relation(fields: [categoryId], references: [id])
 
   @@map("resultado_ia")
 }
 
-//  AREA EXPERTISE 
+// AREA EXPERTISE
 model AreaExpertise {
-  id    String @id @default(uuid()) @map("id_areaExpertise")
-  name  String @map("areaExpertise")
+  id   String @id @default(uuid()) @map("id_area_expertise")
+  name String @map("area_expertise")
+
   experiences ProfessionalExperience[]
 
   @@map("area_expertise")
 }
 
+// EXPERIENCIA PROFESIONAL
 model ProfessionalExperience {
-  id              String @id @default(uuid()) @map("id_experienciaP")
-  areaExpertiseId String @map("id_AreaExpertise")
-  studentId       String @map("id_alumno") 
+  id              String @id @default(uuid()) @map("id_experiencia_profesional")
+  areaExpertiseId String @map("id_area_expertise")
+  studentId       String @map("id_alumno")
   categoryId      String @map("id_categoria")
 
-  // RELACIONES
   student       Student       @relation(fields: [studentId], references: [id])
   areaExpertise AreaExpertise @relation(fields: [areaExpertiseId], references: [id])
+  category      Category      @relation(fields: [categoryId], references: [id])
 
   @@map("experiencia_profesional")
 }
+
 // CONCURSO
 model Contest {
-  id         String           @id @default(uuid()) @map("id_Concurso")
-  name       String           @map("concurso")
-  categoryId String           @map("id_categoria")
-  
-  students   StudentContest[]
+  id         String @id @default(uuid()) @map("id_concurso")
+  name       String @map("nombre")
+  categoryId String @map("id_categoria")
+
+  category Category         @relation(fields: [categoryId], references: [id])
+  students StudentContest[]
 
   @@map("concurso")
 }
-//  ALUMNO-CONCURSO //
+
+// ALUMNO CONCURSO
 model StudentContest {
-  id        String @id @default(uuid()) @map("id_concursoAlumno")
+  id        String @id @default(uuid()) @map("id_concurso_alumno")
   contestId String @map("id_concurso")
   studentId String @map("id_alumno")
 
-  student   Student @relation(fields: [studentId], references: [id])
-  contest   Contest @relation(fields: [contestId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+  contest Contest @relation(fields: [contestId], references: [id])
 
   @@map("concurso_alumno")
 }
 
+// AREA CONOCIMIENTO
+model KnowledgeArea {
+  id            String           @id @default(uuid()) @map("id_area_conocimiento")
+  knowledgeArea KnowledgeAreaEnum @map("area_conocimiento")
 
-// AREA CONOCIMIENTO //
-model KnowledgeArea{
-  id            String @id @default(uuid()) @map("id_areaConocimiento")
-  knowledgeArea KnowledgeAreaEnum
+  careers Career[]
 
-  careers       Career[]
-
-  @@map("area_conocimiento") 
+  @@map("area_conocimiento")
 }
 
 enum KnowledgeAreaEnum {
-    CIENCIAS_FISICO_MATEMATICAS_Y_DE_LAS_INGENIERIAS
-    CIENCIAS_BIOLOGICAS_Y_DE_LA_SALUD
-    CIENCIAS_SOCIALES
-    HUMANIDADES_Y_ARTES
+  CIENCIAS_FISICO_MATEMATICAS_Y_DE_LAS_INGENIERIAS
+  CIENCIAS_BIOLOGICAS_Y_DE_LA_SALUD
+  CIENCIAS_SOCIALES
+  HUMANIDADES_Y_ARTES
 }
 
-// PLAN DE ESTUDIOS //
-model StudyPlan{
-  id        String @id @default(uuid()) @map("id_planEstudios")
-  studyPlan String @map("planEstudios")
-  semesters Int @map("cantidadSemestres")
+// PLAN DE ESTUDIOS
+model StudyPlan {
+  id        String @id @default(uuid()) @map("id_plan_estudios")
+  studyPlan String @map("plan_estudios")
+  semesters Int    @map("cantidad_semestres")
 
-  careers   Career[]
+  careers Career[]
 
   @@map("plan_estudios")
 }
 
-// Category //
-model Category{
-  id        String @id @default(uuid()) @map("id_categoria")
-  category  CategoryEnum
+// CATEGORIA
+model Category {
+  id       String       @id @default(uuid()) @map("id_categoria")
+  category CategoryEnum @map("categoria")
 
-  subjects Subject[]
-  courses Course[]
+  subjects     Subject[]
+  courses      Course[]
   schoolarships Schoolarship[]
+  experiences  ProfessionalExperience[]
+  contests     Contest[]
 
-  @@map("categorias")
+  @@map("categoria")
 }
 
-enum CategoryEnum{
-    MATEMATICAS
-    PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION
-    MATEMATICAS_COMPUTACIONALES
-    COMPUTACION
-    HUMANISTICA_SOCIAL
-    MODELADO_ANALITICO
-    MODELADO_ESTOCASTICO
-    ADMINISTRACION_Y_FINANZAS
-    SISTEMAS_COMPUTACIONALES
-    CIENCIAS_DE_LA_COMPUTACION 
+enum CategoryEnum {
+  MATEMATICAS
+  PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION
+  MATEMATICAS_COMPUTACIONALES
+  COMPUTACION
+  HUMANISTICA_SOCIAL
+  MODELADO_ANALITICO
+  MODELADO_ESTOCASTICO
+  ADMINISTRACION_Y_FINANZAS
+  SISTEMAS_COMPUTACIONALES
+  CIENCIAS_DE_LA_COMPUTACION
 }
 
+// MATERIA
+model Subject {
+  id         String @id @default(uuid()) @map("id_materia")
+  subject    String @map("materia")
+  categoryId String @map("id_categoria")
 
-// Materia //
-model Subject{
-  id          String @id @default(uuid()) @map("id_materia")
-  subject        String @map("materia")
-  categoryID  String @map("id_categoria")
-
-  category    Category @relation(fields: [categoryID], references: [id])
-
-  grades      Grades[]
+  category Category @relation(fields: [categoryId], references: [id])
+  grades   Grades[]
 
   @@map("materia")
 }
 
+// CALIFICACIONES
+model Grades {
+  id        String @id @default(uuid()) @map("id_calificacion")
+  grade     Int    @map("calificacion")
+  subjectId String @map("id_materia")
+  studentId String @map("id_alumno")
 
-// Calificaciones //
-model Grades{
-  id          String @id @default(uuid()) @map("id_calificaciones")
-  grade       Int @map("calificacion")
-  subjectID   String @map("id_materia")
-  studentID   String @map("id_alumno")
+  subject Subject @relation(fields: [subjectId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
 
-  subject     Subject @relation(fields: [subjectID], references: [id])
-  student   Student @relation(fields: [studentID], references: [id])
-
-  @@map("calificaciones")
+  @@map("calificacion")
 }
 
+// CARRERA
+model Career {
+  id             String  @id @default(uuid()) @map("id_carrera")
+  name           String  @map("nombre")
+  studyPlanId    String  @map("id_plan_estudios")
+  knowledgeAreaId String @map("id_area_conocimiento")
+  isMasters      Boolean @map("es_maestria")
 
-// CARRERA //
-model Career{
-  id              String @id @default(uuid()) @map("id_carrera")
-  name            String @map("nombre")
-  studyPlanID     String @map("id_planEstudios")
-  knowledgeAreaID String @map("id_areaConocimiento")
-  isMasters       Boolean @map("esMaestria")
-
-  studyPlan       StudyPlan     @relation(fields: [studyPlanID], references: [id])
-  knowledgeArea   KnowledgeArea @relation(fields: [knowledgeAreaID], references: [id])
-
-  students StudentCareer[]
+  studyPlan     StudyPlan     @relation(fields: [studyPlanId], references: [id])
+  knowledgeArea KnowledgeArea @relation(fields: [knowledgeAreaId], references: [id])
+  students      StudentCareer[]
 
   @@map("carrera")
 }
 
-// CARRERA_ALUMNO //
+// CARRERA ALUMNO
 model StudentCareer {
-  id          String  @id @default(uuid()) @map("id_carreraAlumno")
+  id          String  @id @default(uuid()) @map("id_carrera_alumno")
   careerId    String  @map("id_carrera")
   studentId   String  @map("id_alumno")
-  isGraduated Boolean @map("esEgresado")
+  isGraduated Boolean @map("es_egresado")
 
   career  Career  @relation(fields: [careerId], references: [id])
   student Student @relation(fields: [studentId], references: [id])
@@ -227,130 +222,156 @@ model StudentCareer {
   @@map("carrera_alumno")
 }
 
-model User {
-  id       String @id @default(uuid())
-  email    String @unique
-  name     String
-  noCuenta Int    @unique
-  password String
-
-  addressId String?
-  address   Address? @relation(fields: [addressId], references: [id])
-
-  languages LanguageUser[]
-  courses   CourseUser[]
-  schoolarships SchoolarshipUser[]
-}
-
+// DIRECCION
 model Address {
-  id    String  @id @default(uuid())
-  calle String?
-  cp    Int
+  id          String  @id @default(uuid()) @map("id_direccion")
+  street      String? @map("calle")
+  zipCode     Int     @map("codigo_postal")
+  coloniaId   String  @map("id_colonia")
+  municipioId String  @map("id_municipio")
+  stateId     String  @map("id_estado")
 
-  coloniaId String
-  colonia   Colonia @relation(fields: [coloniaId], references: [id])
+  colonia   Colonia   @relation(fields: [coloniaId], references: [id])
+  municipio Municipio @relation(fields: [municipioId], references: [id])
+  state     State     @relation(fields: [stateId], references: [id])
+  students  Student[]
 
-  municipioId String
-  municipio   Municipio @relation(fields: [municipioId], references: [id])
-
-  estadoId String
-  estado   Estado @relation(fields: [estadoId], references: [id])
-
-  users User[]
+  @@map("direccion")
 }
 
-model Estado {
-  id        String    @id @default(uuid())
-  name      String
+// ESTADO
+model State {
+  id   String @id @default(uuid()) @map("id_estado")
+  name String @map("nombre")
+
   addresses Address[]
+
+  @@map("estado")
 }
 
+// COLONIA
 model Colonia {
-  id        String    @id @default(uuid())
-  name      String
+  id   String @id @default(uuid()) @map("id_colonia")
+  name String @map("nombre")
+
   addresses Address[]
+
+  @@map("colonia")
 }
 
+// MUNICIPIO
 model Municipio {
-  id        String    @id @default(uuid())
-  name      String
+  id   String @id @default(uuid()) @map("id_municipio")
+  name String @map("nombre")
+
   addresses Address[]
+
+  @@map("municipio")
 }
 
-model LanguageUser {
-  id         String @id @default(uuid())
-  userId     String
-  languageId String
-  skillId    String
+// IDIOMA ALUMNO
+model StudentLanguage {
+  id         String @id @default(uuid()) @map("id_idioma_alumno")
+  studentId  String @map("id_alumno")
+  languageId String @map("id_idioma")
+  skillId    String @map("id_habilidad")
 
-  user     User     @relation(fields: [userId], references: [id])
+  student  Student  @relation(fields: [studentId], references: [id])
   language Language @relation(fields: [languageId], references: [id])
   skill    Skill    @relation(fields: [skillId], references: [id])
 
-  @@unique([userId, languageId])
+  @@unique([studentId, languageId])
+  @@map("idioma_alumno")
 }
 
+// HABILIDAD
 model Skill {
-  id          String @id @default(uuid())
-  proficiency String @unique
+  id          String @id @default(uuid()) @map("id_habilidad")
+  proficiency String @unique @map("nivel")
 
-  languageUsers LanguageUser[]
+  studentLanguages StudentLanguage[]
+
+  @@map("habilidad")
 }
 
+// IDIOMA
 model Language {
-  id   String @id @default(uuid())
-  name String @unique
+  id   String @id @default(uuid()) @map("id_idioma")
+  name String @unique @map("nombre")
 
-  certifications Certification[]
-  languageUsers  LanguageUser[]
+  certifications  Certification[]
+  studentLanguages StudentLanguage[]
+
+  @@map("idioma")
 }
 
+// CERTIFICADO
 model Certification {
-  id         String @id @default(uuid())
-  name       String
-  languageId String
+  id         String @id @default(uuid()) @map("id_certificado")
+  name       String @map("nombre")
+  languageId String @map("id_idioma")
 
   language Language @relation(fields: [languageId], references: [id])
+
+  @@map("certificado")
 }
 
-model CourseUser {
-  id       String @id @default(uuid())
-  userId   String
-  courseId String
+// CURSO ALUMNO
+model StudentCourse {
+  id        String @id @default(uuid()) @map("id_curso_alumno")
+  studentId String @map("id_alumno")
+  courseId  String @map("id_curso")
 
-  user   User   @relation(fields: [userId], references: [id])
-  course Course @relation(fields: [courseId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+  course  Course  @relation(fields: [courseId], references: [id])
 
-  @@unique([userId, courseId])
+  @@unique([studentId, courseId])
+  @@map("curso_alumno")
 }
 
+// CURSO
 model Course {
-  id   String @id @default(uuid())
-  name String
-  categoryId String
+  id         String @id @default(uuid()) @map("id_curso")
+  name       String @map("nombre")
+  categoryId String @map("id_categoria")
 
-  category Category @relation(fields: [categoryId], references: [id])
+  category      Category        @relation(fields: [categoryId], references: [id])
+  studentCourses StudentCourse[]
 
-  courseUsers CourseUser[]
+  @@map("curso")
 }
 
-model SchoolarshipUser {
-  id             String @id @default(uuid())
-  userId         String
-  schoolarshipId String
+// BECA ALUMNO
+model StudentSchoolarship {
+  id             String @id @default(uuid()) @map("id_beca_alumno")
+  studentId      String @map("id_alumno")
+  schoolarshipId String @map("id_beca")
 
-  user         User         @relation(fields: [userId], references: [id])
+  student      Student      @relation(fields: [studentId], references: [id])
   schoolarship Schoolarship @relation(fields: [schoolarshipId], references: [id])
 
-  @@unique([userId, schoolarshipId])
+  @@unique([studentId, schoolarshipId])
+  @@map("beca_alumno")
 }
 
+// BECA
 model Schoolarship {
-  id          String @id @default(uuid())
-  name        String
-  categoryId  String
+  id         String @id @default(uuid()) @map("id_beca")
+  name       String @map("nombre")
+  categoryId String @map("id_categoria")
 
-  category Category @relation(fields: [categoryId], references: [id])
+  category             Category              @relation(fields: [categoryId], references: [id])
+  studentSchoolarships StudentSchoolarship[]
 
-  schoolarshipUsers SchoolarshipUser[]
+  @@map("beca")
+}
+
+model Document {
+  id        BigInt                      @id @default(autoincrement())
+  content   String
+  metadata  Json
+  embedding Unsupported("vector(1536)")
+
+  @@map("documents")
+  @@ignore
 }
