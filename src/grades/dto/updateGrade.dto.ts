@@ -13,3 +13,10 @@ export class UpdateGradeDto {
     @IsOptional()
     studentID?: string
 }
+
+export class ConfirmGradesDto {
+  subjects: {
+    subjectID: string;
+    grade: number;
+  }[];
+}

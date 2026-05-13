@@ -3,7 +3,10 @@ import { PrismaService } from 'src/prisma/prisma.service';
 //Dto's
 import { CreateSubjectDto } from './dto/createSubject.dto';
 import { UpdateSubjectDto } from './dto/updateSubject.dto';
+import { procesarYValidarHistorial } from '../utils/parser-pdf';
+import {MateriaTemporal} from '../utils/types.js';
 
+import { BadRequestException } from '@nestjs/common';
 
 
 @Injectable()
@@ -78,5 +81,47 @@ export class SubjectService {
             throw error;
         }
     }
+    async analyzeAndMatchHistory(fileBuffer: Buffer) {
+        const markdown = await procesarYValidarHistorial(fileBuffer);
 
+        if (!markdown) {
+            throw new BadRequestException('El documento no es un historial válido.');
+        }
+
+        const materiasParaMatch: MateriaTemporal[] = [];
+        
+        const materiaRegex = /-\s+\*\*(.+?)\*\*:\s+(\d+)/g;
+        let match: RegExpExecArray | null;
+
+        while ((match = materiaRegex.exec(markdown)) !== null) {
+            materiasParaMatch.push({
+                nombre: match[1].trim(),
+                calificacion: parseInt(match[2], 10)
+            });
+        }
+
+        const catalogo = await this.prisma.subject.findMany();
+
+        const subjectsMatched = materiasParaMatch.map(mPDF => {
+            const matchBD = catalogo.find(mBD => 
+                this.normalizar(mBD.subject) === this.normalizar(mPDF.nombre)
+            );
+
+            return {
+                subjectID: matchBD?.id || null, 
+                subjectName: mPDF.nombre,      
+                grade: mPDF.calificacion,      
+                exists: !!matchBD              
+            };
+        });
+
+        return {
+            rawMarkdown: markdown,
+            subjects: subjectsMatched
+        };
+    }
+
+    private normalizar(t: string): string {
+        return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    }
 }

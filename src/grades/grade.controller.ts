@@ -1,29 +1,30 @@
-import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Req, UseGuards } from '@nestjs/common';
 import { GradeService } from './grade.service';
 import { CreateGradeDto } from './dto/createGrade.dto';
-import { UpdateGradeDto } from './dto/updateGrade.dto';
+import { UpdateGradeDto, ConfirmGradesDto } from './dto/updateGrade.dto';
+import {AuthGuard } from '@nestjs/passport';
 
 @Controller('grade')
 export class GradeController {
-    
-    constructor(private readonly gradeService: GradeService) {}
+
+    constructor(private readonly gradeService: GradeService) { }
 
     //GET
     @Get('')
-    async getAllGrades(){
-        try{
+    async getAllGrades() {
+        try {
             return await this.gradeService.getAllGrades()
-        }catch(error){
+        } catch (error) {
             console.error('ERROR EN GET ALL GRADES:', error);
             throw error;
         }
     }
 
     @Get(':id')
-    async getGradeById(@Param('id') id: string){
-        try{
+    async getGradeById(@Param('id') id: string) {
+        try {
             return await this.gradeService.getGradeById(id)
-        }catch(error){
+        } catch (error) {
             console.error('ERROR EN GET GRADE BY ID:', error);
             throw error;
         }
@@ -31,10 +32,10 @@ export class GradeController {
 
     //POST
     @Post('')
-    async createGrade(@Body() dto: CreateGradeDto){
-        try{
+    async createGrade(@Body() dto: CreateGradeDto) {
+        try {
             return await this.gradeService.createGrade(dto)
-        }catch(error){
+        } catch (error) {
             console.error('ERROR EN POST GRADE:', error);
             throw error;
         }
@@ -42,10 +43,10 @@ export class GradeController {
 
     //Put
     @Put(':id')
-    async updateGrade(@Body() dto: UpdateGradeDto, @Param('id') id: string){
-        try{
+    async updateGrade(@Body() dto: UpdateGradeDto, @Param('id') id: string) {
+        try {
             return await this.gradeService.updateGrade(id, dto)
-        }catch(error){
+        } catch (error) {
             console.error('ERROR EN UPDATE GRADE:', error);
             throw error;
         }
@@ -53,12 +54,19 @@ export class GradeController {
 
     //DELETE
     @Delete(':id')
-    async deleteGrade(@Param('id') id: string){
-        try{
+    async deleteGrade(@Param('id') id: string) {
+        try {
             return await this.gradeService.deleteGrade(id)
-        }catch(error){
+        } catch (error) {
             console.error('ERROR EN DELETE GRADE:', error);
             throw error;
         }
+    }
+    @UseGuards(AuthGuard('jwt')) 
+    @Post('confirm-import')
+    async confirmImport(@Req() req: any, @Body() dto: ConfirmGradesDto) {
+        console.log('Datos del usuario en el Request:', req.user);
+        const studentId = req.user.userId;
+        return await this.gradeService.saveConfirmedGrades(studentId, dto);
     }
 }

@@ -1,0 +1,198 @@
+POST http://localhost:3001/api/grade
+Content-Type: application/json
+
+{
+    "grade" : 10,
+    "subjectID": "a55bf970-9aad-4771-857f-cb3498855ff8",
+    "studentID" : "b6cd969b-c1c6-404e-97bf-b17d8e425ecf"
+}
+
+###
+POST http://localhost:3001/api/grade/confirm-import
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5NzRlZDAzYi05NmJjLTQwOTAtODJiZi1hMTBkZGE0MTU0MTYiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjMyMTE5MTM5OSwiaWF0IjoxNzc4NjkwMTA1LCJleHAiOjE3Nzg2OTczMDV9.jpi9ZwKD7DQ5zoAQm-OORvkXJcUh4eR2OyBs8VqNlHQ
+
+{
+ "subjects": [
+        {
+            "subjectID": "c554aedb-7079-408b-96ce-0ec155b7b607",
+            "subjectName": "ALGEBRA SUPERIOR",
+            "grade": 8,
+            "exists": true
+        },
+        {
+            "subjectID": "59de22f5-9f8d-4b12-8644-2520d1ac9214",
+            "subjectName": "CALCULO I",
+            "grade": 6,
+            "exists": true
+        },
+        {
+            "subjectID": "aa25836d-cb33-44c6-9012-38355c4327cb",
+            "subjectName": "ORGANIZACION DE COMPUTADORAS",
+            "grade": 9,
+            "exists": true
+        },
+        {
+            "subjectID": "93e346f7-cb47-4841-b101-e88bb473a21e",
+            "subjectName": "PROGRAMACION I",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "dfa5dba0-b9b4-4159-bb90-b1505c14f531",
+            "subjectName": "SOLUCION ALGORITMICA DE PROBLEMAS",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "8e34ec26-da77-4dd0-a146-1b43b411d0dd",
+            "subjectName": "LOGICA MATEMATICA",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "3ee1a945-9388-4b52-9929-6bdc0e339800",
+            "subjectName": "ALGEBRA LINEAL",
+            "grade": 7,
+            "exists": true
+        },
+        {
+            "subjectID": "0bd7a93c-9f20-4b39-a459-a4bb85010346",
+            "subjectName": "CALCULO II",
+            "grade": 9,
+            "exists": true
+        },
+        {
+            "subjectID": "df544130-5afd-48f1-9b77-f513886e3c2d",
+            "subjectName": "GEOMETRIA DEL ESPACIO",
+            "grade": 9,
+            "exists": true
+        },
+        {
+            "subjectID": "dc00c06e-2f42-4ff0-bc22-df6f2b736299",
+            "subjectName": "INGLES INTERMEDIO I",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "5a8b4e87-e7b8-46b0-9b35-255c502853a8",
+            "subjectName": "PROGRAMACION II",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "95868bc6-63f8-4a41-9f01-8594f7dfb64e",
+            "subjectName": "REDES DE COMPUTO",
+            "grade": 9,
+            "exists": true
+        },
+        {
+            "subjectID": "6dec9320-d613-4adf-9eac-dba03085a96a",
+            "subjectName": "CALCULO III",
+            "grade": 8,
+            "exists": true
+        },
+        {
+            "subjectID": "7a63f729-6086-4561-a2d1-c7e73b00efd8",
+            "subjectName": "PROGRAMACION ORIENTADA A OBJETOS",
+            "grade": 8,
+            "exists": true
+        },
+        {
+            "subjectID": "e37ca283-94ec-4125-9dbe-01f06d06b419",
+            "subjectName": "ESTRUCTURAS DE DATOS",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "527a08d3-f1a2-4bb8-82ae-0a5feaa79337",
+            "subjectName": "INGLES INTERMEDIO II",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "d82b448d-89d5-4d22-a30b-537cbb782fd5",
+            "subjectName": "METODOS NUMERICOS I",
+            "grade": 9,
+            "exists": true
+        },
+        {
+            "subjectID": "83af2e4c-25ed-4d6a-843e-03a5b3492cdf",
+            "subjectName": "MATEMATICAS DISCRETAS",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "9bf4891c-67eb-4ae1-9b7d-236efe37ebf4",
+            "subjectName": "METODOS NUMERICOS II",
+            "grade": 9,
+            "exists": true
+        },
+        {
+            "subjectID": "38c74388-ff45-472c-8c05-99a27acb2baf",
+            "subjectName": "TEORIA DE GRAFICAS",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "1a30d374-dfc2-4dd2-8a30-a33e550f7e28",
+            "subjectName": "BASES DE DATOS",
+            "grade": 9,
+            "exists": true
+        },
+        {
+            "subjectID": "7e454db9-c58f-4512-8062-65728f7b29f1",
+            "subjectName": "PROBABILIDAD",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "f08e4141-1c5d-417c-8aca-acbedecd5d6c",
+            "subjectName": "CALCULO IV",
+            "grade": 8,
+            "exists": true
+        },
+        {
+            "subjectID": "cc27f7e4-b923-4936-b219-6566138e802c",
+            "subjectName": "INGLES AVANZADO I",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "785ef7f2-2fbc-452c-9333-c4f8e058721a",
+            "subjectName": "ECUACIONES DIFERENCIALES I",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "75a47cfa-3a97-4b04-8bfb-498f757ef559",
+            "subjectName": "ESTADISTICA I",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "2f4eafa7-96a6-4112-851c-e35822fd1d9c",
+            "subjectName": "INGENIERIA DE SOFTWARE",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "2c4c9d36-e9a5-4a46-9fa3-212f2fd0b75d",
+            "subjectName": "INGLES AVANZADO II",
+            "grade": 9,
+            "exists": true
+        },
+        {
+            "subjectID": "f5ec9c61-33d7-411a-82a7-ef9d249c7a23",
+            "subjectName": "OPTIMIZACION I",
+            "grade": 10,
+            "exists": true
+        },
+        {
+            "subjectID": "7f56e9a0-cb67-425a-a47a-c09b528b46ef",
+            "subjectName": "SEMINARIO SOBRE MEXICO ACTUAL",
+            "grade": 10,
+            "exists": true
+        }
+    ]
+}

@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateGradeDto } from './dto/createGrade.dto';
-import { UpdateGradeDto } from './dto/updateGrade.dto';
+import { UpdateGradeDto, ConfirmGradesDto } from './dto/updateGrade.dto';
 
 
 
@@ -82,6 +82,25 @@ export class GradeService {
             console.error('ERROR EN DELETE GRADE:', error);
             throw error;
         }
+    }
+
+    async saveConfirmedGrades(studentId: string, dto: ConfirmGradesDto) {
+        const dataToInsert = dto.subjects
+            .filter(s => s.subjectID !== null)
+            .map(s => ({
+                studentId: studentId,
+                subjectId: s.subjectID,
+                grade: s.grade,
+            }));
+
+        if (dataToInsert.length === 0) {
+            throw new BadRequestException('No hay materias validas');
+        }
+        
+        return await this.prisma.grades.createMany({
+            data: dataToInsert,
+            skipDuplicates: true, 
+        });
     }
 
 }

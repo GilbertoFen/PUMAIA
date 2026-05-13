@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseInterceptors,UploadedFile } from '@nestjs/common';
 import { SubjectService } from './subject.service';
 import { CreateSubjectDto } from './dto/createSubject.dto';
 import { UpdateSubjectDto } from './dto/updateSubject.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('subjects')
 export class SubjectController {
@@ -60,5 +61,11 @@ export class SubjectController {
             console.error('ERROR EN DELETE SUBJECT:', error);
             throw error;
         }
+    }
+
+    @Post('analyze-pdf')
+    @UseInterceptors(FileInterceptor('file'))
+    async analyzeHistory(@UploadedFile() file: any) { 
+        return await this.subjectService.analyzeAndMatchHistory(file.buffer);
     }
 }
