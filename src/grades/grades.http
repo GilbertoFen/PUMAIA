@@ -196,3 +196,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5NzRlZ
         }
     ]
 }
+###
+GET http://localhost:3001/api/grade/my-grades
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI5NzRlZDAzYi05NmJjLTQwOTAtODJiZi1hMTBkZGE0MTU0MTYiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjMyMTE5MTM5OSwiaWF0IjoxNzc4Njk2NzI1LCJleHAiOjE3Nzg3MDM5MjV9.jTtJo64DaK9fdvqC9urfPdb1Gvy44qnEmRKsm5Lx17I

@@ -96,11 +96,35 @@ export class GradeService {
         if (dataToInsert.length === 0) {
             throw new BadRequestException('No hay materias validas');
         }
-        
+
         return await this.prisma.grades.createMany({
             data: dataToInsert,
-            skipDuplicates: true, 
+            skipDuplicates: true,
         });
+    }
+
+    async getMyGrades(studentId: string) {
+        const grades = await this.prisma.grades.findMany({
+            where: {
+                studentId: studentId,
+            },
+            include: {
+                subject: true, // Trae la info de la tabla Subject relacionada
+            },
+            orderBy: {
+                subject: {
+                    subject: 'asc', // Ordenar por nombre de materia
+                },
+            },
+        });
+
+        // Mapeamos para que el Frontend reciba el formato que ya espera
+        return grades.map((g) => ({
+            subjectID: g.subjectId,
+            subjectName: g.subject.subject, // Nombre real de la materia
+            grade: g.grade,
+            exists: true,
+        }));
     }
 
 }

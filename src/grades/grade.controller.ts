@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Req, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { GradeService } from './grade.service';
 import { CreateGradeDto } from './dto/createGrade.dto';
 import { UpdateGradeDto, ConfirmGradesDto } from './dto/updateGrade.dto';
-import {AuthGuard } from '@nestjs/passport';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('grade')
 export class GradeController {
@@ -18,6 +18,19 @@ export class GradeController {
             console.error('ERROR EN GET ALL GRADES:', error);
             throw error;
         }
+    }
+    
+    @UseGuards(AuthGuard('jwt')) 
+    @Get('my-grades')
+    async getMyGrades(@Req() req: any) {
+        const studentId = req.user.userId;
+        console.log('stuentId extraído del token:', studentId);
+
+        if (!studentId) {
+            throw new UnauthorizedException('No se pudo identificar al alumno.');
+        }
+
+        return await this.gradeService.getMyGrades(studentId);
     }
 
     @Get(':id')
@@ -62,7 +75,7 @@ export class GradeController {
             throw error;
         }
     }
-    @UseGuards(AuthGuard('jwt')) 
+    @UseGuards(AuthGuard('jwt'))
     @Post('confirm-import')
     async confirmImport(@Req() req: any, @Body() dto: ConfirmGradesDto) {
         console.log('Datos del usuario en el Request:', req.user);
