@@ -35,6 +35,10 @@ import { SkillsModule } from './skills/skills.module';
 import { CertificationsModule } from './certifications/certifications.module';
 import { SchoolarshipsModule } from './schoolarships/schoolarships.module';
 import { CoursesModule } from './courses/courses.module';
+import { QuestionnaireController } from './questionnaire/questionnaire.controller';
+import { QuestionnaireService } from './questionnaire/questionnaire.service';
+import { QuestionnaireModule } from './questionnaire/questionnaire.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -67,11 +71,11 @@ import { CoursesModule } from './courses/courses.module';
     SkillsModule, 
     CertificationsModule, 
     SchoolarshipsModule, 
-    CoursesModule
+    CoursesModule, QuestionnaireModule, ChatModule
   ],
-  controllers: [AreasExpertiseController, //AppController
+  controllers: [AreasExpertiseController, QuestionnaireController, //AppController
   ],
-  providers: [AreasExpertiseService, //AppService
+  providers: [AreasExpertiseService, QuestionnaireService, //AppService
 
   ],
 

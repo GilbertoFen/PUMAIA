@@ -19,7 +19,7 @@ POST http://localhost:3001/api/autenticacion/login
 Content-Type: application/json
 
 {
-  "accountNumber": 321191399,
+  "accountNumber": 100003,
   "password": "12345678"
 }
 

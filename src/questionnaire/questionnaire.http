@@ -1,0 +1,21 @@
+POST http://localhost:3001/api/questionnaire/save
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjODIzNjA2OS02YzA5LTRmMDItYTE1OC0xMjM4NDJkNjA1YjgiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4Nzg5NTM2LCJleHAiOjE3Nzg3OTY3MzZ9.7-0vno50QyM8fDYQgPYHXA3oLumNjvJ4caloPNFMmnU
+
+{
+  "answers": [
+    {
+      "id": "p1_intereses",
+      "category": "INTERESES",
+      "value": ["Desarrollo Web", "Inteligencia Artificial"]
+    },
+    {
+      "id": "p2_proyectos",
+      "category": "EXPERIENCIA",
+      "value": {
+        "_list": ["E-commerce con React", "Bot de Telegram"],
+        "exp": "2 años como freelance"
+      }
+    }
+  ]
+}

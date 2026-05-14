@@ -1,6 +1,6 @@
 import { PrismaClient, CategoryEnum, KnowledgeAreaEnum } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import * as pg from 'pg'; 
+import * as pg from 'pg';
 import * as dotenv from 'dotenv';
 import * as bcrypt from 'bcrypt';
 
@@ -10,8 +10,49 @@ const pool = new pg.Pool({ connectionString: process.env.DIRECT_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 const generalPassword = '12345678';
-const passwordHash =  bcrypt.hashSync(generalPassword, 10); 
-
+const passwordHash = bcrypt.hashSync(generalPassword, 10);
+const studentsData = [
+  {
+    accountNumber: 100000,
+    name: 'SAUL',
+    lastNameP: 'CASAS',
+    lastNameM: 'LORENZO',
+    interest: 'Full Stack Development',
+    currentSemester: 6,
+    average: 9.2,
+    email: '100000@pcpuma.acatlan.com',
+  },
+  {
+    accountNumber: 100001,
+    name: 'JOSE EMMANUEL',
+    lastNameP: 'ISLAS',
+    lastNameM: 'ROMERO',
+    interest: 'Ciencia de datos',
+    currentSemester: 6,
+    average: 8.6,
+    email: '100001@pcpuma.acatlan.com',
+  },
+  {
+    accountNumber: 100002,
+    name: 'JOAQUIN RACIEL',
+    lastNameP: 'RESENDIZ',
+    lastNameM: 'RODRIGUEZ',
+    interest: 'Güeras',
+    currentSemester: 6,
+    average: 8.8,
+    email: '100002@pcpuma.acatlan.com',
+  },
+  {
+    accountNumber: 100003,
+    name: 'LUIS GILBERTO',
+    lastNameP: 'AVALOS',
+    lastNameM: 'VILLALOBOS',
+    interest: 'nose',
+    currentSemester: 6,
+    average: 9.2,
+    email: '100003@pcpuma.acatlan.com',
+  }
+];
 
 async function main() {
   console.log('1. Limpiar tablas');
@@ -119,24 +160,25 @@ async function main() {
   });
   console.log("3. Crear usuarios")
   // 7. Alumnos - student
-  const student1 = await prisma.student.create({
-    data: {
-      accountNumber: 321191399,
-      name: 'LUIS GILBERTO',
-      lastNameP: 'AVALOS',
-      lastNameM: 'VILLALOBOS',
-      interest: 'Desarrollo Web',
-      currentSemester: 6,
-      average: 9,
-      email: 'gil@pcpuma.acatlan.com',
-      password: passwordHash,
-      addressId: direccion.id
-    }
-  });
+  for (const studentData of studentsData) {
+    // Creamos el estudiante
+    const newStudent = await prisma.student.create({
+      data: {
+        ...studentData,
+        password: passwordHash, // El hash que generaste al principio
+        addressId: direccion.id // La dirección que ya tienes creada
+      }
+    });
 
-  await prisma.studentCareer.create({
-    data: { studentId: student1.id, careerId: careerMAC.id, isGraduated: false }
-  });
+    // Creamos la relación con la carrera (StudentCareer)
+    await prisma.studentCareer.create({
+      data: {
+        studentId: newStudent.id,
+        careerId: careerMAC.id,
+        isGraduated: false
+      }
+    });
+  }
 
   console.log('---- Seed cargado completo ----');
 }

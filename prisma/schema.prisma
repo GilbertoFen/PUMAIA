@@ -20,6 +20,9 @@ model Student {
   password        String                   @map("contrasena")
   addressId       String?                  @map("id_direccion")
   address         Address?                 @relation(fields: [addressId], references: [id])
+  hasCompletedQuiz Boolean  @default(false) @map("cuestionario_completado")
+  answers         QuestionnaireAnswer[]
+  chats           Conversation[]
   schoolarships   StudentSchoolarship[]
   grades          Grades[]
   careers         StudentCareer[]
@@ -31,6 +34,46 @@ model Student {
 
   @@map("alumno")
 }
+
+model QuestionnaireAnswer {
+  id         String            @id @default(uuid()) @map("id_respuesta")
+  studentId  String            @map("id_alumno")
+  student    Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  questionId String            @map("id_pregunta")
+  categoria  CategoriaPregunta @map("categoria")
+  answer     Json              @map("respuesta")
+  
+  createdAt  DateTime          @default(now()) @map("creado_en")
+  updatedAt  DateTime          @updatedAt @map("actualizado_en")
+
+  @@unique([studentId, questionId])
+  @@map("respuestas_cuestionario")
+}
+
+model Conversation {
+  id         String    @id @default(uuid()) @map("id_conversacion")
+  studentId  String    @map("id_alumno")
+  student    Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  title      String?   @map("titulo") 
+  createdAt  DateTime  @default(now()) @map("creado_en")
+  updatedAt  DateTime  @updatedAt @map("actualizado_en")
+  messages   Message[]
+
+  @@map("conversaciones")
+}
+
+model Message {
+  id             String       @id @default(uuid()) @map("id_mensaje")
+  conversationId String       @map("id_conversacion")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           RolMensaje   @map("rol") 
+  content        String       @map("contenido") @db.Text // Text para mensajes largos
+  createdAt      DateTime     @default(now()) @map("creado_en")
+  @@map("mensajes")
+}
+
 
 model AICategory {
   id      String     @id @default(uuid()) @map("id_categoria_ia")
@@ -352,4 +395,20 @@ enum CategoryEnum {
   ADMINISTRACION_Y_FINANZAS
   SISTEMAS_COMPUTACIONALES
   CIENCIAS_DE_LA_COMPUTACION
+}
+
+enum CategoriaPregunta {
+  INTERESES
+  HABILIDADES
+  EXPECTATIVAS
+  EXPERIENCIA
+
+  @@map("categoria_pregunta")
+}
+
+enum RolMensaje {
+  USER
+  ASSISTANT
+
+  @@map("rol_mensaje")
 }
