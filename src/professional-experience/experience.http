@@ -19,3 +19,6 @@ Content-Type: application/json
   "areaExpertiseId": "a9903b52-617b-4ace-ac31-fd01a23bb844",
   "categoryId": "e9dcfa15-0f22-455d-828d-d43c28c10489"
 }
+
+###
+GET http://localhost:3001/api/category

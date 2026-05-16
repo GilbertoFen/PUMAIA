@@ -27,16 +27,8 @@ export class ContestService {
   }
 
   async findAll() {
-    return await this.prisma.student.findMany({
-      include: {
-        contests: {
-          include: {
-            contest: true
-          }
-        },
-        aiResults: true
-      }
-    });
+    // Consultamos directamente el catálogo global de concursos
+    return await this.prisma.contest.findMany();
   }
   async findByStudent(studentId: string) {
     return await this.prisma.studentContest.findMany({
