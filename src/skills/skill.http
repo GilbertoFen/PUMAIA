@@ -1,0 +1,9 @@
+POST http://localhost:3001/api/skills
+Content-Type: application/json
+
+{
+    "proficiency": "A1"
+}
+
+###
+GET http://localhost:3001/api/skills

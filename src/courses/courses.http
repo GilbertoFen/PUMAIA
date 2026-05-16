@@ -1,0 +1,16 @@
+POST http://localhost:3001/api/courses
+Content-Type: application/json
+
+{
+    "name":"Curso de programacion en C",
+    "categoryId":"e9dcfa15-0f22-455d-828d-d43c28c10489"
+}
+
+###
+POST http://localhost:3001/api/courses/courseUser
+Content-Type: application/json
+
+{
+    "courseId":"7658cb74-1504-4839-8bc6-fcc147939c76",
+    "studentId":"d2ee86f2-8174-4f57-a9b9-db6c70db8342"
+}

@@ -1,11 +1,14 @@
 import {
   Controller,
-  Body, Get, Post, Delete, Param
+  Body, Get, Post, Delete, Param, Req, Patch,UseGuards, BadRequestException
 } from '@nestjs/common';
 import { StudentsService } from './students.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { NotFoundException } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+
 @Controller('students')
+@UseGuards(AuthGuard('jwt'))
 export class StudentsController {
   constructor(private service: StudentsService) { }
 
@@ -21,6 +24,11 @@ export class StudentsController {
       },
       interest: student.interest
     }));
+  }
+  @Get('profile-summary')
+  async getProfile(@Req() req) {
+    // req.user.id viene del token JWT mapeado por tu Guard
+    return this.service.getFullProfileSummary(req.user.userId);
   }
   @Get(':email')
   async findByEmail(@Param('email') email: string){
@@ -68,6 +76,16 @@ export class StudentsController {
   ) {
     console.log(`Asignando concurso ${data.contestId} al alumno ${data.studentId}`);
     return await this.service.assignContest(data.studentId, data.contestId);
+  }
+  
+  @Patch('interests')
+  async updateInterests(@Req() req, @Body('interest') interest: string) {
+    // Validación rápida: si no envían nada o no es texto, arrojamos un error limpio
+    if (typeof interest !== 'string') {
+      throw new BadRequestException('La propiedad "interest" debe ser una cadena de texto válida.');
+    }
+    
+    return this.service.updateInterests(req.user.userId, interest);
   }
   @Delete('remove-contest/:relationId')
   async removeContest(@Param('relationId') id: string) {

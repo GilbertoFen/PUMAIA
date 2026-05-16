@@ -1,4 +1,4 @@
-import { Injectable} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateContestDto } from './dto/create-contest.dto';
 import { EnrollStudentDto } from './dto/enroll-student.dto';
@@ -20,7 +20,7 @@ export class ContestService {
         contestId: dto.contestId,
       },
       include: {
-        contest: true, 
+        contest: true,
         student: true,
       },
     });
@@ -31,10 +31,10 @@ export class ContestService {
       include: {
         contests: {
           include: {
-            contest: true  
+            contest: true
           }
         },
-        aiResults: true    
+        aiResults: true
       }
     });
   }
@@ -64,5 +64,19 @@ export class ContestService {
     }
 
     return student;
+  }
+  // En tu contest.service.ts
+  async updateEnrollment(id: string, dto: { contestId: string }) {
+    return await this.prisma.studentContest.update({
+      where: { id },
+      data: { contestId: dto.contestId },
+      include: { contest: true }
+    });
+  }
+
+  async removeEnrollment(id: string) {
+    return await this.prisma.studentContest.delete({
+      where: { id }
+    });
   }
 }

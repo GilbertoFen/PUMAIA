@@ -3,17 +3,17 @@ Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjODIzNjA2OS02YzA5LTRmMDItYTE1OC0xMjM4NDJkNjA1YjgiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4Nzg5NTM2LCJleHAiOjE3Nzg3OTY3MzZ9.7-0vno50QyM8fDYQgPYHXA3oLumNjvJ4caloPNFMmnU
 
 {
-  "content": "Dickson",
-  "conversationId":"988e864e-8168-4cdd-8e38-16e0fc3ab403"
+  "content": "Ok, Necesito ayuda sobre la beca de manutencion",
+  "conversationId": "0753398e-2ece-4a6b-a221-4b0eab791f1a"
 }
 
 ###
-PATCH http://localhost:3001/api/chat/conversations/988e864e-8168-4cdd-8e38-16e0fc3ab403
+PATCH http://localhost:3001/api/chat/conversations/0753398e-2ece-4a6b-a221-4b0eab791f1a
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjODIzNjA2OS02YzA5LTRmMDItYTE1OC0xMjM4NDJkNjA1YjgiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4Nzg5NTM2LCJleHAiOjE3Nzg3OTY3MzZ9.7-0vno50QyM8fDYQgPYHXA3oLumNjvJ4caloPNFMmnU
 
 {
-    "title": "Conversacion con varios mensajes"
+    "title": "Implementacion real de un modelo"
 }
 
 ###

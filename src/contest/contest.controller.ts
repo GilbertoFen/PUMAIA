@@ -1,19 +1,29 @@
-import { Controller, Body, Get, Post, Param, UseGuards, Req } from '@nestjs/common';
+import { Controller, Body, Get, Post, Param, UseGuards, Req, Delete, Patch } from '@nestjs/common';
 import { ContestService } from './contest.service';
 import { CreateContestDto } from './dto/create-contest.dto';
 import { EnrollStudentDto } from './dto/enroll-student.dto';
 import { AuthGuard } from '@nestjs/passport';
 
 @Controller('contests')
+@UseGuards(AuthGuard('jwt'))
 export class ContestController {
   constructor(private service: ContestService) { }
-  @UseGuards(AuthGuard('jwt')) 
+  @UseGuards(AuthGuard('jwt'))
 
   @Post()
   create(@Body() dto: CreateContestDto, @Req() req) {
     const userId = req.user.id;
     console.log("id del usuario :", userId);
     return this.service.create(dto);
+  }
+  @Patch('enrollment/:id')
+  async updateEnrollment(@Param('id') id: string, @Body('contestId') contestId: string) {
+    return this.service.updateEnrollment(id, { contestId });
+  }
+
+  @Delete('enrollment/:id')
+  async removeEnrollment(@Param('id') id: string) {
+    return this.service.removeEnrollment(id);
   }
   @Post('enroll')
   async enroll(@Body() dto: EnrollStudentDto) {

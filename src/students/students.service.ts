@@ -76,6 +76,44 @@ export class StudentsService {
             throw error;
         }
     }
+    // En tu student.service.ts (o el servicio que maneje el perfil del alumno)
+    async updateInterests(studentId: string, interest: string) {
+        return await this.prisma.student.update({
+            where: {
+                id: studentId
+            },
+            data: {
+                interest: interest.trim(), // Insertamos el string crudo tal cual llegó
+            },
+            select: {
+                id: true,
+                interest: true
+            }
+        });
+    }
+    // En tu student.service.ts
+    async getFullProfileSummary(studentId: string) {
+        return await this.prisma.student.findUnique({
+            where: { id: studentId },
+            include: {
+                courses: {
+                    include: { course: true }
+                },
+                languages: {
+                    include: { language: true, skill: true }
+                },
+                schoolarships: { // Verifica si en tu prisma se escribe con una o dos 'h'
+                    include: { schoolarship: true }
+                },
+                contests: {
+                    include: { contest: true }
+                },
+                experiences: {
+                    include: { areaExpertise: true }
+                }
+            }
+        });
+    }
     async removeContest(relationId: string) {
         try {
             return await this.prisma.studentContest.delete({

@@ -1,0 +1,21 @@
+
+POST http://localhost:3001/api/professional-experience
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkMmVlODZmMi04MTc0LTRmNTctYTliOS1kYjZjNzBkYjgzNDIiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4OTE5ODc0LCJleHAiOjE3Nzg5MjcwNzR9.TFobvUMz13-7jX9Lj47eiBUV7qtYMnsjpNKMMHStMe4
+
+{
+   "studentId":"d2ee86f2-8174-4f57-a9b9-db6c70db8342",
+    "areaExpertiseId":"a9903b52-617b-4ace-ac31-fd01a23bb844",
+    "categoryId": "02d58315-28d7-4e4a-a008-25c0d342b6ef"
+}
+
+
+###
+PATCH http://localhost:3001/api/professional-experience/cd5756e3-cb3d-4e32-b2db-1609f28f7ed3
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkMmVlODZmMi04MTc0LTRmNTctYTliOS1kYjZjNzBkYjgzNDIiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4OTE5ODc0LCJleHAiOjE3Nzg5MjcwNzR9.TFobvUMz13-7jX9Lj47eiBUV7qtYMnsjpNKMMHStMe4
+Content-Type: application/json
+
+{
+  "areaExpertiseId": "a9903b52-617b-4ace-ac31-fd01a23bb844",
+  "categoryId": "e9dcfa15-0f22-455d-828d-d43c28c10489"
+}

@@ -28,3 +28,15 @@ GET http://localhost:3001/api/students/32@pcpuma.acatlan.com
 
 ###
 GET http://localhost:3001/api/students/account/321191300
+###
+GET http://localhost:3001/api/students/profile-summary
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkMmVlODZmMi04MTc0LTRmNTctYTliOS1kYjZjNzBkYjgzNDIiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4OTE5ODc0LCJleHAiOjE3Nzg5MjcwNzR9.TFobvUMz13-7jX9Lj47eiBUV7qtYMnsjpNKMMHStMe4
+
+###
+PATCH http://localhost:3001/api/students/interests
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkMmVlODZmMi04MTc0LTRmNTctYTliOS1kYjZjNzBkYjgzNDIiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4OTE5ODc0LCJleHAiOjE3Nzg5MjcwNzR9.TFobvUMz13-7jX9Lj47eiBUV7qtYMnsjpNKMMHStMe4
+Content-Type: application/json
+
+{
+  "interest": "Desarrollo web, Programación en C, Inteligencia Artificial, Ciberseguridad"
+}

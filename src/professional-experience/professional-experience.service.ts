@@ -13,7 +13,7 @@ export class ProfessionalExperienceService {
                 categoryId: dto.categoryId,
             },
             include: {
-                areaExpertise: true,  
+                areaExpertise: true,
                 student: true,
             },
         });
@@ -25,6 +25,18 @@ export class ProfessionalExperienceService {
             include: {
                 areaExpertise: true,
             },
+        });
+    }
+    async update(id: string, dto: { areaExpertiseId?: string; categoryId?: string }) {
+        return await this.prisma.professionalExperience.update({
+            where: { id },
+            data: {
+                areaExpertiseId: dto.areaExpertiseId,
+                categoryId: dto.categoryId,
+            },
+            include: {
+                areaExpertise: true,
+            }
         });
     }
 

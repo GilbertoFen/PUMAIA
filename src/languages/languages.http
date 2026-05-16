@@ -1,0 +1,17 @@
+POST http://localhost:3001/api/languages
+Content-Type: application/json
+
+{
+    "name":"Ingles"
+}
+
+
+###
+POST http://localhost:3001/api/languages/languageUsers
+Content-Type: application/json
+
+{
+    "studentId":"d2ee86f2-8174-4f57-a9b9-db6c70db8342",
+    "languageId":"e1025b3d-bd1a-44bc-b1ff-cd43c0702e83",
+    "skillId":"269a0a23-637d-4aec-82e4-75a7c4725eca"
+}
