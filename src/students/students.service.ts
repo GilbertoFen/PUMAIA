@@ -110,7 +110,8 @@ export class StudentsService {
                 },
                 experiences: {
                     include: { areaExpertise: true }
-                }
+                },
+                answers: true
             }
         });
     }

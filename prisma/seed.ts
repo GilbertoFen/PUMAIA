@@ -11,6 +11,7 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 const generalPassword = '12345678';
 const passwordHash = bcrypt.hashSync(generalPassword, 10);
+
 const studentsData = [
   {
     accountNumber: 100000,
@@ -37,7 +38,7 @@ const studentsData = [
     name: 'JOAQUIN RACIEL',
     lastNameP: 'RESENDIZ',
     lastNameM: 'RODRIGUEZ',
-    interest: 'Güeras',
+    interest: 'Ciencia de Datos',
     currentSemester: 6,
     average: 8.8,
     email: '100002@pcpuma.acatlan.com',
@@ -47,7 +48,7 @@ const studentsData = [
     name: 'LUIS GILBERTO',
     lastNameP: 'AVALOS',
     lastNameM: 'VILLALOBOS',
-    interest: 'nose',
+    interest: 'Desarrollo Web',
     currentSemester: 6,
     average: 9.2,
     email: '100003@pcpuma.acatlan.com',
@@ -57,33 +58,48 @@ const studentsData = [
 async function main() {
   console.log('1. Limpiar tablas');
 
-  await prisma.grades.deleteMany({});
-  await prisma.studentCareer.deleteMany({});
-  await prisma.subject.deleteMany({});
-  await prisma.student.deleteMany({});
-  await prisma.address.deleteMany({});
-  await prisma.colonia.deleteMany({});
-  await prisma.municipio.deleteMany({});
-  await prisma.state.deleteMany({});
-  await prisma.career.deleteMany({});
-  await prisma.studyPlan.deleteMany({});
-  await prisma.knowledgeArea.deleteMany({});
-  await prisma.category.deleteMany({});
+  await prisma.studentCourse.deleteMany({}).catch(() => { });
+  await prisma.studentLanguage.deleteMany({}).catch(() => { });
+  await prisma.studentSchoolarship.deleteMany({}).catch(() => { });
+  await prisma.studentContest.deleteMany({}).catch(() => { });
+  await prisma.professionalExperience.deleteMany({}).catch(() => { });
 
-  console.log('2. llenar tablas y enums');
-  // 1. Areas de conocimiento - KnowledgeArea
+  await prisma.course.deleteMany({}).catch(() => { });
+  await prisma.schoolarship.deleteMany({}).catch(() => { });
+  await prisma.contest.deleteMany({}).catch(() => { });
+  await prisma.language.deleteMany({}).catch(() => { });
+  await prisma.skill.deleteMany({}).catch(() => { });
+  await prisma.areaExpertise.deleteMany({}).catch(() => { });
+
+  await prisma.grades.deleteMany({}).catch(() => { });
+  await prisma.studentCareer.deleteMany({}).catch(() => { });
+  await prisma.subject.deleteMany({}).catch(() => { });
+  await prisma.student.deleteMany({}).catch(() => { });
+  await prisma.address.deleteMany({}).catch(() => { });
+  await prisma.colonia.deleteMany({}).catch(() => { });
+  await prisma.municipio.deleteMany({}).catch(() => { });
+  await prisma.state.deleteMany({}).catch(() => { });
+  await prisma.career.deleteMany({}).catch(() => { });
+  await prisma.studyPlan.deleteMany({}).catch(() => { });
+  await prisma.knowledgeArea.deleteMany({}).catch(() => { });
+  await prisma.category.deleteMany({}).catch(() => { });
+
+  console.log('2. Llenar tablas y enums');
+
+  // 1. Áreas de conocimiento - KnowledgeArea
   const areas = await Promise.all([
     prisma.knowledgeArea.create({ data: { knowledgeArea: 'CIENCIAS_FISICO_MATEMATICAS_Y_DE_LAS_INGENIERIAS' } }),
     prisma.knowledgeArea.create({ data: { knowledgeArea: 'CIENCIAS_BIOLOGICAS_Y_DE_LA_SALUD' } }),
     prisma.knowledgeArea.create({ data: { knowledgeArea: 'CIENCIAS_SOCIALES' } }),
     prisma.knowledgeArea.create({ data: { knowledgeArea: 'HUMANIDADES_Y_ARTES' } }),
   ]);
+
   // 2. Plan de estudios - StudyPlan
   const plan2014 = await prisma.studyPlan.create({
     data: { studyPlan: '2014', semesters: 8 }
   });
-  // 3. Carrera -career
 
+  // 3. Carrera - Career
   const careerMAC = await prisma.career.create({
     data: {
       name: 'Matemáticas Aplicadas y Computación',
@@ -92,20 +108,17 @@ async function main() {
       isMasters: false
     }
   });
-  //4. Categorias - category
-  const categories: Record<string, string> = {};
-  const catNames = [
-    'MATEMATICAS', 'PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION',
-    'MATEMATICAS_COMPUTACIONALES', 'COMPUTACION', 'HUMANISTICA_SOCIAL',
-    'MODELADO_ANALITICO', 'MODELADO_ESTOCASTICO', 'ADMINISTRACION_Y_FINANZAS',
-    'SISTEMAS_COMPUTACIONALES', 'CIENCIAS_DE_LA_COMPUTACION'
-  ];
 
+  // 4. Categorías - Category
+  const categories: Record<string, string> = {};
+
+  // Iteramos sobre el Enum real para rellenar la base de datos de forma segura usando la columna 'category'
   for (const catName of Object.values(CategoryEnum)) {
     const createdCat = await prisma.category.create({ data: { category: catName } });
     categories[catName] = createdCat.id;
   }
-  //5. Materias -subjects
+
+  // 5. Materias - Subjects
   const currentSubjects = [
     { name: 'ALGEBRA SUPERIOR', cat: categories['MATEMATICAS'] },
     { name: 'CALCULO I', cat: categories['MATEMATICAS'] },
@@ -144,7 +157,8 @@ async function main() {
       data: { subject: m.name, categoryId: m.cat }
     });
   }
-  //6. Direcciones - adresses
+
+  // 6. Direcciones - Addresses
   const edo = await prisma.state.create({ data: { name: 'Estado de México' } });
   const mun = await prisma.municipio.create({ data: { name: 'Naucalpan' } });
   const col = await prisma.colonia.create({ data: { name: 'Santa Cruz del Monte' } });
@@ -158,19 +172,28 @@ async function main() {
       stateId: edo.id
     }
   });
-  console.log("3. Crear usuarios")
-  // 7. Alumnos - student
+  
+  const catIADesarrollo = await prisma.aICategory.create({
+    data: { name: 'Perfil Orientado al Desarrollo de Sistemas y Software' }
+  });
+  await prisma.aICategory.create({
+    data: { name: 'Perfil Analítico y Ciencia de Datos' }
+  });
+  await prisma.aICategory.create({
+    data: { name: 'Perfil de Optimización e Investigación de Operaciones' }
+  });
+
+  console.log("3. Crear usuarios");
+  // 7. Alumnos - Student
   for (const studentData of studentsData) {
-    // Creamos el estudiante
     const newStudent = await prisma.student.create({
       data: {
         ...studentData,
-        password: passwordHash, // El hash que generaste al principio
-        addressId: direccion.id // La dirección que ya tienes creada
+        password: passwordHash,
+        addressId: direccion.id
       }
     });
 
-    // Creamos la relación con la carrera (StudentCareer)
     await prisma.studentCareer.create({
       data: {
         studentId: newStudent.id,
@@ -180,7 +203,118 @@ async function main() {
     });
   }
 
-  console.log('---- Seed cargado completo ----');
+  console.log("4. Sembrar Catálogos Adicionales (Cursos, Becas, Concursos, Idiomas)");
+
+  // ─────────────────────────────────────────────────────────
+  // A. CURSOS GLOBALES (Reutilizando Categorías válidas del Enum)
+  // ─────────────────────────────────────────────────────────
+  await prisma.course.create({
+    data: {
+      name: 'Curso Avanzado de Programación en C y C++',
+      categoryId: categories['COMPUTACION'], // Vinculado a COMPUTACION
+    },
+  });
+  await prisma.course.create({
+    data: {
+      name: 'Desarrollo de APIs Robustas con NestJS y TypeScript',
+      categoryId: categories['SISTEMAS_COMPUTACIONALES'], // Vinculado a SISTEMAS_COMPUTACIONALES
+    },
+  });
+  await prisma.course.create({
+    data: {
+      name: 'Introducción al Machine Learning con Python y Scikit-Learn',
+      categoryId: categories['CIENCIAS_DE_LA_COMPUTACION'], // Vinculado a CIENCIAS_DE_LA_COMPUTACION
+    },
+  });
+
+  // ─────────────────────────────────────────────────────────
+  // B. BECAS GLOBALES
+  // ─────────────────────────────────────────────────────────
+  await prisma.schoolarship.create({
+    data: {
+      name: 'Beca de Excelencia Académica UNAM',
+      categoryId: categories['HUMANISTICA_SOCIAL'],
+    },
+  });
+  await prisma.schoolarship.create({
+    data: {
+      name: 'Beca Santander Movilidad Internacional',
+      categoryId: categories['ADMINISTRACION_Y_FINANZAS'],
+    },
+  });
+  await prisma.schoolarship.create({
+    data: {
+      name: 'Beca de Conectividad y Apoyo Nutricional FES Acatlán',
+      categoryId: categories['HUMANISTICA_SOCIAL'],
+    },
+  });
+
+  // ─────────────────────────────────────────────────────────
+  // C. CONCURSOS GLOBALES
+  // ─────────────────────────────────────────────────────────
+  await prisma.contest.create({
+    data: {
+      name: 'Hackathon Anual NestJS & Supabase MAC',
+      categoryId: categories['COMPUTACION'],
+    },
+  });
+  await prisma.contest.create({
+    data: {
+      name: 'Torneo de Programación Competitiva ACM-ICPC FES Acatlán',
+      categoryId: categories['COMPUTACION'],
+    },
+  });
+  await prisma.contest.create({
+    data: {
+      name: 'Datathon PumaIA de Analítica Predictiva',
+      categoryId: categories['PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION'],
+    },
+  });
+
+  // ─────────────────────────────────────────────────────────
+  // D. IDIOMAS GLOBALES
+  // ─────────────────────────────────────────────────────────
+  await prisma.language.create({ data: { name: 'Inglés' } });
+  await prisma.language.create({ data: { name: 'Alemán' } });
+  await prisma.language.create({ data: { name: 'Francés' } });
+
+  // ─────────────────────────────────────────────────────────
+  // E. SKILLS / NIVELES CEFR
+  // ─────────────────────────────────────────────────────────
+  await prisma.skill.create({
+    data: { id: 'A1', proficiency: 'A1' },
+  });
+  await prisma.skill.create({
+    data: { id: 'A2', proficiency: 'A2' },
+  });
+  await prisma.skill.create({
+    data: { id: 'B1', proficiency: 'B1' },
+  });
+  await prisma.skill.create({
+    data: { proficiency: 'B2' },
+  });
+  await prisma.skill.create({
+    data: { proficiency: 'C1' },
+
+  });
+  await prisma.skill.create({
+    data: { id: 'C2', proficiency: 'C2' },
+  });
+
+  // ─────────────────────────────────────────────────────────
+  // F. ÁREAS DE EXPERTISE
+  // ─────────────────────────────────────────────────────────
+  await prisma.areaExpertise.create({
+    data: { name: 'Desarrollo Backend e Infraestructura' },
+  });
+  await prisma.areaExpertise.create({
+    data: { name: 'Ciberseguridad y Auditoría de Sistemas' },
+  });
+  await prisma.areaExpertise.create({
+    data: { name: 'Ingeniería de Datos y Pipelines NLP' },
+  });
+
+  console.log('---- Seed cargado completo y en verde ----');
 }
 
 main()

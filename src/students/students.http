@@ -30,13 +30,46 @@ GET http://localhost:3001/api/students/32@pcpuma.acatlan.com
 GET http://localhost:3001/api/students/account/321191300
 ###
 GET http://localhost:3001/api/students/profile-summary
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkMmVlODZmMi04MTc0LTRmNTctYTliOS1kYjZjNzBkYjgzNDIiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4OTE5ODc0LCJleHAiOjE3Nzg5MjcwNzR9.TFobvUMz13-7jX9Lj47eiBUV7qtYMnsjpNKMMHStMe4
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2YzhjNzcwYi0yMjM5LTQ5MjgtOWM3Zi1kMzcxNDNiMjBhYTUiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc5MDA0MzczLCJleHAiOjE3NzkwMTE1NzN9.V93ugUPVdqk7hRNznA73h5No_98_GeNk2VwZzmA-fp8
 
 ###
 PATCH http://localhost:3001/api/students/interests
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkMmVlODZmMi04MTc0LTRmNTctYTliOS1kYjZjNzBkYjgzNDIiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4OTE5ODc0LCJleHAiOjE3Nzg5MjcwNzR9.TFobvUMz13-7jX9Lj47eiBUV7qtYMnsjpNKMMHStMe4
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2YzhjNzcwYi0yMjM5LTQ5MjgtOWM3Zi1kMzcxNDNiMjBhYTUiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc5MDA0MzczLCJleHAiOjE3NzkwMTE1NzN9.V93ugUPVdqk7hRNznA73h5No_98_GeNk2VwZzmA-fp8
 Content-Type: application/json
 
 {
   "interest": "Desarrollo web, Programación en C, Inteligencia Artificial, Ciberseguridad"
+}
+
+###
+POST http://localhost:3001/api/questionnaire/save
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2YzhjNzcwYi0yMjM5LTQ5MjgtOWM3Zi1kMzcxNDNiMjBhYTUiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc5MDA0MzczLCJleHAiOjE3NzkwMTE1NzN9.V93ugUPVdqk7hRNznA73h5No_98_GeNk2VwZzmA-fp8
+Content-Type: application/json
+
+{
+  "answers": [
+    {
+      "questionId": "p1_interes_area",
+      "question": "¿Qué área de MAC te llama más la atención?",
+      "answer": "Desarrollo de Software y Cloud Computing"
+    },
+    {
+      "questionId": "p2_tecnologias_chips",
+      "question": "Selecciona las tecnologías con las que has interactuado:",
+      "answer": ["C++", "TypeScript", "SQL", "HTML/CSS"]
+    },
+    {
+      "questionId": "p3_experiencia_objeto",
+      "question": "¿Cuentas con experiencia laboral previa?",
+      "answer": {
+        "answer": "Sí",
+        "exp": "6 meses como becario de soporte y bases de datos"
+      }
+    },
+    {
+      "questionId": "p4_modalidad_trabajo",
+      "question": "¿Qué modalidad de trabajo prefieres?",
+      "answer": "Remoto o Híbrido"
+    }
+  ]
 }

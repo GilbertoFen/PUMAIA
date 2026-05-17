@@ -16,4 +16,7 @@ Content-Type: application/json
     "contestId":"f44965e8-35a2-46df-99f0-cb6c78e58d49"
 }
 
+###
+GET http://localhost:3001/api/contests
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkMmVlODZmMi04MTc0LTRmNTctYTliOS1kYjZjNzBkYjgzNDIiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4OTI1MTU1LCJleHAiOjE3Nzg5MzIzNTV9.is4yuw26zwxCeEES3VH-WinGA7RIwMD4r-NrOBQTWMw
 
