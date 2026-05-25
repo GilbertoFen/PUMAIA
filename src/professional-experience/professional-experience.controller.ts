@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, Patch, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Delete,Request, Body, Param, Patch, UseGuards } from '@nestjs/common';
 import { ProfessionalExperienceService } from './professional-experience.service';
 import { CreateProfessionalExperienceDto } from './dto/create-professional-experience.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -41,6 +41,14 @@ export class ProfessionalExperienceController {
         @Body() dto: { areaExpertiseId?: string; categoryId?: string }
     ) {
         return this.service.update(id, dto);
+    }
+    @Post('analyze')
+    async analyzeExperience(
+        @Request() req: any,
+        @Body('text') text: string // Extraemos el texto libre del JSON
+    ) {
+        const studentId = req.user.userId;
+        return this.service.parseAndSaveExperience(studentId, text);
     }
 
     @Delete(':id')

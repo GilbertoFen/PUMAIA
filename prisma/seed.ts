@@ -57,7 +57,7 @@ const studentsData = [
 
 async function main() {
   console.log('1. Limpiar tablas');
-
+  await prisma.aIResult.deleteMany({}).catch(() => { });
   await prisma.studentCourse.deleteMany({}).catch(() => { });
   await prisma.studentLanguage.deleteMany({}).catch(() => { });
   await prisma.studentSchoolarship.deleteMany({}).catch(() => { });
@@ -102,6 +102,7 @@ async function main() {
   // 3. Carrera - Career
   const careerMAC = await prisma.career.create({
     data: {
+      id: "e1acac76-ad66-458f-b148-906ccec35538",
       name: 'Matemáticas Aplicadas y Computación',
       studyPlanId: plan2014.id,
       knowledgeAreaId: areas[0].id,
@@ -165,6 +166,7 @@ async function main() {
 
   const direccion = await prisma.address.create({
     data: {
+      id: "391ced55-1955-400c-b93d-7328e6672d33",
       street: 'Av del chutazo',
       zipCode: 53110,
       coloniaId: col.id,
@@ -172,7 +174,7 @@ async function main() {
       stateId: edo.id
     }
   });
-  
+
   const catIADesarrollo = await prisma.aICategory.create({
     data: { name: 'Perfil Orientado al Desarrollo de Sistemas y Software' }
   });
@@ -291,10 +293,10 @@ async function main() {
     data: { id: 'B1', proficiency: 'B1' },
   });
   await prisma.skill.create({
-    data: { proficiency: 'B2' },
+    data: { id: 'B2', proficiency: 'B2' },
   });
   await prisma.skill.create({
-    data: { proficiency: 'C1' },
+    data: { id: 'C1', proficiency: 'C1' },
 
   });
   await prisma.skill.create({

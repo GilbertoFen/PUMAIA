@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException,InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMessageDto, UpdateConversationDto } from './dto/chat.dto';
 
@@ -27,7 +27,7 @@ export class ChatService {
     });
   }
 
-  async handleMessage(studentId: string, dto: CreateMessageDto) {
+  async handleMessage(studentId: string, dto: CreateMessageDto) { // Asumiendo que dto tiene { conversationId?, content }
     let conversationId = dto.conversationId;
 
     // 1. Lógica de Conversación (Nueva o Existente)
@@ -41,7 +41,7 @@ export class ChatService {
       conversationId = newConv.id;
     }
 
-    // 2. Guardar mensaje del usuario en Supabase
+    // 2. Guardar mensaje del usuario en la Base de Datos
     await this.prisma.message.create({
       data: {
         conversationId,
@@ -50,17 +50,54 @@ export class ChatService {
       },
     });
 
+    // 3. RECUPERAR EL HISTORIAL DE LA CONVERSACIÓN (Para la memoria de la IA)
+    // Traemos los mensajes ordenados por fecha. Excluimos el que acabamos de guardar porque ese va en 'message'.
+    const allMessages = await this.prisma.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    const historyForAI = allMessages.slice(0, -1).map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
+
+    // 4. RECUPERAR EL PERFIL DEL ALUMNO (Para el contexto de la IA)
+    const student = await this.prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        experiences: { include: { areaExpertise: true } },
+        answers: true // Traemos el cuestionario
+      }
+    });
+
+    // Extraemos un par de datos clave del cuestionario (Ajusta los IDs si es necesario)
+    const modalidad = student?.answers.find(a => a.questionId === 'p4_modalidad_trabajo')?.answer || 'No especificada';
+    const experiencia = student?.experiences.map(e => e.areaExpertise.name).join(', ') || 'Sin experiencia registrada';
+
+    // Armamos el "Prompt de Sistema" con el perfil
+    const studentProfileStr = `
+      Nombre: ${student?.name} ${student?.lastNameP}.
+      Semestre actual: ${student?.currentSemester}.
+      Promedio: ${student?.average || 0}.
+      Modalidad preferida: ${modalidad}.
+      Experiencia previa: ${experiencia}.
+    `;
+
     try {
-      // 3. LLAMADA CON FETCH A RENDER
+      // 5. LLAMADA CON FETCH A RENDER (Mandando el paquete completo)
       const response = await fetch('https://server-genai.onrender.com/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: dto.content }),
+        body: JSON.stringify({
+          message: dto.content,
+          student_profile: studentProfileStr,
+          history: historyForAI
+        }),
       });
 
-      // Fetch no lanza error en 4xx o 5xx, hay que validarlo manualmente
       if (!response.ok) {
         throw new Error(`Error en el servidor de IA: ${response.statusText}`);
       }
@@ -68,7 +105,7 @@ export class ChatService {
       const data = await response.json();
       const aiResponse = data.response;
 
-      // 4. Guardar respuesta de la IA en Supabase
+      // 6. Guardar respuesta de la IA en la Base de Datos
       return await this.prisma.message.create({
         data: {
           conversationId,

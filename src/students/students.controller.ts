@@ -1,7 +1,9 @@
 import {
   Controller,
-  Body, Get, Post, Delete, Param, Req, Patch,UseGuards, BadRequestException
+  Body, Get, Post, Delete, Request, Param, Req, Patch, UseGuards, BadRequestException, UseInterceptors, UploadedFile
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import 'multer';
 import { StudentsService } from './students.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { NotFoundException } from '@nestjs/common';
@@ -31,7 +33,7 @@ export class StudentsController {
     return this.service.getFullProfileSummary(req.user.userId);
   }
   @Get(':email')
-  async findByEmail(@Param('email') email: string){
+  async findByEmail(@Param('email') email: string) {
     const student = await this.service.findByEmail(email);
     if (!student) throw new NotFoundException('Alumno no encontrado');
     return {
@@ -48,11 +50,11 @@ export class StudentsController {
   @Get('account/:accountNumber')
   async findOne(@Param('accountNumber') accountNumber: string) {
     const student = await this.service.findByAccountNumber(parseInt(accountNumber));
-    
+
     if (!student) throw new NotFoundException('Alumno no encontrado');
     const career = student.careers?.[0]?.career?.name || 'Carrera no asignada';
 
-     return {
+    return {
       accountNumber: student.accountNumber,
       fullName: `${student.name} ${student.lastNameP} ${student.lastNameM}`.toUpperCase(),
       academicInfo: {
@@ -67,7 +69,7 @@ export class StudentsController {
 
   @Post()
   async create(@Body() dto: CreateStudentDto) {
-     return await this.service.create(dto);
+    return await this.service.create(dto);
   }
 
   @Post('assign-contest')
@@ -77,19 +79,33 @@ export class StudentsController {
     console.log(`Asignando concurso ${data.contestId} al alumno ${data.studentId}`);
     return await this.service.assignContest(data.studentId, data.contestId);
   }
-  
+
   @Patch('interests')
   async updateInterests(@Req() req, @Body('interest') interest: string) {
     // Validación rápida: si no envían nada o no es texto, arrojamos un error limpio
     if (typeof interest !== 'string') {
       throw new BadRequestException('La propiedad "interest" debe ser una cadena de texto válida.');
     }
-    
+
     return this.service.updateInterests(req.user.userId, interest);
   }
-  @Delete('remove-contest/:relationId')
-  async removeContest(@Param('relationId') id: string) {
-    return await this.service.removeContest(id);
+  @UseGuards(AuthGuard('jwt')) // 🔥 Protegemos la ruta exigiendo el token
+  @Post('avatar') 
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAvatar(
+    @Request() req: any, // Extraemos la request completa
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    // 1. Validar archivo
+    if (!file) {
+      throw new BadRequestException('No se recibió ningún archivo de imagen.');
+    }
+
+    // 2. Extraer el ID de forma segura desde el Token (req.user es inyectado por el AuthGuard)
+    const studentId = req.user.userId;
+
+    // 3. Subir la imagen atada a ese ID seguro
+    return this.service.uploadAvatar(studentId, file);
   }
-  
+
 }

@@ -22,3 +22,13 @@ Content-Type: application/json
 
 ###
 GET http://localhost:3001/api/category
+
+
+###
+POST http://localhost:3001/api/professional-experience/analyze
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI3NTMwYWUwYS03MmJkLTQwMDUtYmY2NC02MWUxZjZiNjQ5MDkiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc5Njc5MzU1LCJleHAiOjE3Nzk2ODY1NTV9.RJGqqfqlVlsGSwo0e-N6tSZZIN_NdSEwp8ckdMFrMSQ
+Content-Type: application/json
+
+{
+  "text": "Trabaje en atencion al cliente durante 6 años"
+}

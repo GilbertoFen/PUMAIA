@@ -15,11 +15,12 @@ model Student {
   lastNameM       String                   @map("apellido_materno")
   interest        String?                  @map("interes")
   currentSemester Int                      @map("semestre_actual")
-  average         Int                      @map("promedio")
+  average         Int?                      @map("promedio")
   email           String                   @unique @map("correo")
   password        String                   @map("contrasena")
   addressId       String?                  @map("id_direccion")
   address         Address?                 @relation(fields: [addressId], references: [id])
+  avatarUrl      String?                    @map("avatar_url")
   hasCompletedQuiz Boolean  @default(false) @map("cuestionario_completado")
   answers         QuestionnaireAnswer[]
   chats           Conversation[]

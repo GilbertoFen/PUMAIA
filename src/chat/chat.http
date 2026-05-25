@@ -1,10 +1,9 @@
 POST http://localhost:3001/api/chat/message
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjODIzNjA2OS02YzA5LTRmMDItYTE1OC0xMjM4NDJkNjA1YjgiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4Nzg5NTM2LCJleHAiOjE3Nzg3OTY3MzZ9.7-0vno50QyM8fDYQgPYHXA3oLumNjvJ4caloPNFMmnU
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI3NTMwYWUwYS03MmJkLTQwMDUtYmY2NC02MWUxZjZiNjQ5MDkiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc5Njc5MzU1LCJleHAiOjE3Nzk2ODY1NTV9.RJGqqfqlVlsGSwo0e-N6tSZZIN_NdSEwp8ckdMFrMSQ
 
 {
-  "content": "Ok, Necesito ayuda sobre la beca de manutencion",
-  "conversationId": "0753398e-2ece-4a6b-a221-4b0eab791f1a"
+  "content": "Hola, ¿sabes cómo me llamo y en qué semestre voy?"
 }
 
 ###

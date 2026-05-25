@@ -1,18 +1,15 @@
 ### POST 
-POST http://localhost:3001/api/students
+POST http://localhost:3001/api/autenticacion/register
 Content-Type: application/json
 
 {
-  "accountNumber": 100000,
-  "name": "JOSE EMMANUEL",
-  "lastNameP": "ISLAS",
-  "lastNameM": "ROMERO",
-  "interest": "MONICA",
-  "currentSemester": 6,
-  "average": 9.0,
-  "email": "30@pcpuma.acatlan.com",
-  "password": "12345678",
-  "addressId" : "cebcc6ce-4c58-406a-991b-2b45e1c84188"
+  "accountNumber": 31500000,
+  "name": "Gilberto",
+  "lastNameP": "Gómez",
+  "lastNameM": "Pérez",
+  "email": "gil@correo.com",
+  "password": "Password123!",
+  "currentSemester": 6
 }
 ###
 POST http://localhost:3001/api/autenticacion/login
@@ -70,6 +67,30 @@ Content-Type: application/json
       "questionId": "p4_modalidad_trabajo",
       "question": "¿Qué modalidad de trabajo prefieres?",
       "answer": "Remoto o Híbrido"
+    }
+  ]
+}
+###
+POST http://localhost:3001/api/students/6d50f58c-dc0a-4059-b026-920f05841a03/avatar
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2ZDUwZjU4Yy1kYzBhLTQwNTktYjAyNi05MjBmMDU4NDFhMDMiLCJuYW1lIjoiR2lsYmVydG8iLCJhY2NvdW50TnVtYmVyIjozMTUwMDAwMCwiaWF0IjoxNzc5Njc1NjY4LCJleHAiOjE3Nzk2ODI4Njh9.uwe735WNzwDiT5edPOCYi7qS5GWZOCzx2DxZbeSoSNA
+
+
+###
+PATCH http://localhost:3001/api/questionnaire/update
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI3NTMwYWUwYS03MmJkLTQwMDUtYmY2NC02MWUxZjZiNjQ5MDkiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc5Njc5MzU1LCJleHAiOjE3Nzk2ODY1NTV9.RJGqqfqlVlsGSwo0e-N6tSZZIN_NdSEwp8ckdMFrMSQ
+Content-Type: application/json
+
+{
+  "answers": [
+    {
+      "questionId": "p2_tecnologias_chips",
+      "question": "Selecciona las tecnologías con las que has interactuado:",
+      "answer": ["C++", "TypeScript", "SQL", "HTML/CSS", "NestJS"] 
+    },
+    {
+      "questionId": "p4_modalidad_trabajo",
+      "question": "¿Qué modalidad de trabajo prefieres?",
+      "answer": "100% Presencial"
     }
   ]
 }
