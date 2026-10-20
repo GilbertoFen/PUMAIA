@@ -180,6 +180,11 @@ model Subject {
   grades     Grades[]
   category   Category @relation(fields: [categoryId], references: [id])
 
+  code        Int?              @map("codigo")
+  semester    String?           @map("semestre")
+  credits     Int?              @map("creditos")
+  professors  ProfessorCourse[]
+
   @@map("materia")
 }
 
@@ -347,6 +352,39 @@ model Document {
   @@map("documents")
   @@ignore
 }
+
+model Professor {
+  id          String           @id @default(uuid()) @map("id_profesor")
+  name        String           @map("nombre")
+  lastNameM   String           @map("apellido_m")
+  lastNameP   String           @map("apellido_p")
+  entryDate   DateTime?        @map("anio_ingreso") @db.Date
+  career      String?          @map("carrera")
+  aboutMe     String?          @map("acerca_de_mi") @db.Text
+  phone       String?          @map("telefono")
+  email       String?          @map("email")
+  active      Boolean          @default(true) @map("activo")
+  
+  // Relación con materias que imparte
+  courses     ProfessorCourse[]
+
+  @@map("profesores")
+}
+
+model ProfessorCourse {
+  id          String     @id @default(uuid()) @map("id_profesor_curso")
+  professorId String     @map("id_profesor")
+  subjectId   String     @map("id_materia")
+  notes       String?    @map("notas") @db.Text
+
+  // Relaciones
+  professor   Professor  @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  subject     Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([professorId, subjectId])
+  @@map("profesor_curso")
+}
+
 
 model n8n_chat_histories {
   id         Int    @id @default(autoincrement())

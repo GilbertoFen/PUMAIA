@@ -151,6 +151,29 @@ async function main() {
     { name: 'INGLES AVANZADO II', cat: categories['HUMANISTICA_SOCIAL'] },
     { name: 'OPTIMIZACION I', cat: categories['PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION'] },
     { name: 'SEMINARIO SOBRE MEXICO ACTUAL', cat: categories['HUMANISTICA_SOCIAL'] },
+    { name: 'ADMINISTRACION DE BASES DE DATOS', cat: categories['SISTEMAS_COMPUTACIONALES'] },
+    { name: 'ADMINISTRACION Y SISTEMAS DE CONTABILIDAD', cat: categories['HUMANISTICA_SOCIAL'] },
+    { name: 'ANALISIS DE ALGORITMOS', cat: categories['COMPUTACION'] },
+    { name: 'ANALISIS DE DECISIONES Y TEORIA DE JUEGOS', cat: categories['PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION'] },
+    { name: 'ELEMENTOS DE FINANZAS E INVERSIONES', cat: categories['MODELADO_ANALITICO'] },
+    { name: 'GRAFICACION POR COMPUTADORA', cat: categories['CIENCIAS_DE_LA_COMPUTACION'] },
+    { name: 'INVESTIGACION EN MATEMATICAS APLICADAS Y COMPUTACION', cat: categories['HUMANISTICA_SOCIAL'] },
+    { name: 'METODOS VARIACIONALES', cat: categories['MODELADO_ANALITICO'] },
+    { name: 'PROGRAMACION MULTIMEDIA', cat: categories['CIENCIAS_DE_LA_COMPUTACION'] },
+    { name: 'SIMULACION ESTOCASTICA', cat: categories['PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION'] },
+    { name: 'SISTEMAS DINAMICOS', cat: categories['MODELADO_ANALITICO'] },
+    { name: 'SISTEMAS INTELIGENTES', cat: categories['CIENCIAS_DE_LA_COMPUTACION'] },
+    { name: 'SISTEMAS OPERATIVOS', cat: categories['SISTEMAS_COMPUTACIONALES'] },
+    { name: 'TEMAS SELECTOS DE COMPUTACION I', cat: categories['COMPUTACION'] },
+    { name: 'TEMAS SELECTOS DE ESTADISTICA', cat: categories['PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION'] },
+    { name: 'TEMAS SELECTOS DE MATEMATICAS I', cat: categories['MATEMATICAS'] },
+    { name: 'DESARROLLO WEB', cat: categories['CIENCIAS_DE_LA_COMPUTACION'] },
+    { name: 'ECUACIONES DIFERENCIALES II', cat: categories['MATEMATICAS'] },
+    { name: 'ESTADISTICA II', cat: categories['PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION'] },
+    { name: 'OPTIMIZACION II', cat: categories['PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION'] },
+    { name: 'PROCESOS ESTOCASTICOS', cat: categories['PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION'] },
+    { name: 'SEMINARIO SOBRE ETICA Y RESPONSABILIDAD SOCIAL', cat: categories['HUMANISTICA_SOCIAL'] },
+    { name: 'SEM. SOBRE ETICA Y RESPONSAB. SOCIAL', cat: categories['HUMANISTICA_SOCIAL'] },
   ];
 
   for (const m of currentSubjects) {
@@ -206,32 +229,32 @@ async function main() {
   }
 
   console.log("4. Sembrar Catálogos Adicionales (Cursos, Becas, Concursos, Idiomas)");
+  const courses = [
+    { name: 'Curso de programación en C y C++', category: 'COMPUTACION' },
+    { name: 'Curso de desarrollo web frontend con React', category: 'COMPUTACION' },
+    { name: 'Curso de desarrollo backend con Node.js', category: 'SISTEMAS_COMPUTACIONALES' },
+    { name: 'Curso de bases de datos y SQL', category: 'SISTEMAS_COMPUTACIONALES' },
+    { name: 'Curso de estructuras de datos y algoritmos', category: 'COMPUTACION' },
+    { name: 'Curso de programación en Python para ciencia de datos', category: 'CIENCIAS_DE_LA_COMPUTACION' },
+    { name: 'Curso de inteligencia artificial y machine learning', category: 'CIENCIAS_DE_LA_COMPUTACION' },
+    { name: 'Curso de ciberseguridad y redes', category: 'SISTEMAS_COMPUTACIONALES' },
+    { name: 'Curso de administración de proyectos de software', category: 'SISTEMAS_COMPUTACIONALES' },
+    { name: 'Curso de matemáticas discretas', category: 'MATEMATICAS' },
+    { name: 'Curso de estadística inferencial y probabilidad', category: 'PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION' },
+    { name: 'Curso de optimización lineal y no lineal', category: 'PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION' },
+    { name: 'Curso de computación en la nube (Cloud Computing)', category: 'SISTEMAS_COMPUTACIONALES' },
+    { name: 'Curso de desarrollo de aplicaciones móviles', category: 'COMPUTACION' },
+    { name: 'Curso de análisis financiero y modelos económicos', category: 'ADMINISTRACION_Y_FINANZAS' }
+  ];
 
-  // ─────────────────────────────────────────────────────────
-  // A. CURSOS GLOBALES (Reutilizando Categorías válidas del Enum)
-  // ─────────────────────────────────────────────────────────
-  await prisma.course.create({
-    data: {
-      name: 'Curso Avanzado de Programación en C y C++',
-      categoryId: categories['COMPUTACION'], // Vinculado a COMPUTACION
-    },
-  });
-  await prisma.course.create({
-    data: {
-      name: 'Desarrollo de APIs Robustas con NestJS y TypeScript',
-      categoryId: categories['SISTEMAS_COMPUTACIONALES'], // Vinculado a SISTEMAS_COMPUTACIONALES
-    },
-  });
-  await prisma.course.create({
-    data: {
-      name: 'Introducción al Machine Learning con Python y Scikit-Learn',
-      categoryId: categories['CIENCIAS_DE_LA_COMPUTACION'], // Vinculado a CIENCIAS_DE_LA_COMPUTACION
-    },
-  });
+  for (const course of courses) {
+    await prisma.course.create({
+      data: { name: course.name, categoryId: categories[course.category] },
+    });
+  }
 
-  // ─────────────────────────────────────────────────────────
-  // B. BECAS GLOBALES
-  // ─────────────────────────────────────────────────────────
+
+  // 1. Becas existentes
   await prisma.schoolarship.create({
     data: {
       name: 'Beca de Excelencia Académica UNAM',
@@ -251,35 +274,56 @@ async function main() {
     },
   });
 
+  // 2. Nuevas becas extraídas del documento
+  const nuevasBecas = [
+    { name: 'Beca Manutención UNAM', cat: 'HUMANISTICA_SOCIAL' },
+    { name: 'Beca Santander Universitaria', cat: 'ADMINISTRACION_Y_FINANZAS' },
+    { name: 'Beca de fortalecimiento académico de los estudios de licenciatura y de alta exigencia academica', cat: 'HUMANISTICA_SOCIAL' },
+    { name: 'Beca para disminuir el bajo rendimiento academico', cat: 'HUMANISTICA_SOCIAL' },
+    { name: 'Beca para apoyo a grupos vulnerables provenientes de zonas marginadas del pais', cat: 'HUMANISTICA_SOCIAL' }
+  ];
+
+  for (const beca of nuevasBecas) {
+    await prisma.schoolarship.create({
+      data: {
+        name: beca.name,
+        categoryId: categories[beca.cat],
+      },
+    });
+  }
+
+
   // ─────────────────────────────────────────────────────────
   // C. CONCURSOS GLOBALES
   // ─────────────────────────────────────────────────────────
-  await prisma.contest.create({
-    data: {
-      name: 'Hackathon Anual NestJS & Supabase MAC',
-      categoryId: categories['COMPUTACION'],
-    },
-  });
-  await prisma.contest.create({
-    data: {
-      name: 'Torneo de Programación Competitiva ACM-ICPC FES Acatlán',
-      categoryId: categories['COMPUTACION'],
-    },
-  });
-  await prisma.contest.create({
-    data: {
-      name: 'Datathon PumaIA de Analítica Predictiva',
-      categoryId: categories['PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION'],
-    },
-  });
+  const contests = [
+    { name: 'Hackathon de desarrollo web', category: 'COMPUTACION' },
+    { name: 'Hackathon de aplicaciones móviles', category: 'COMPUTACION' },
+    { name: 'Concurso de programación competitiva', category: 'COMPUTACION' },
+    { name: 'Datathon de ciencia de datos', category: 'PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION' },
+    { name: 'Concurso de seguridad informática (CTF)', category: 'SISTEMAS_COMPUTACIONALES' },
+    { name: 'Hackathon de inteligencia artificial', category: 'CIENCIAS_DE_LA_COMPUTACION' },
+    { name: 'Concurso de modelos matemáticos aplicados', category: 'MATEMATICAS' },
+    { name: 'Hackathon de automatización y robótica', category: 'SISTEMAS_COMPUTACIONALES' },
+    { name: 'Concurso de gestión financiera y emprendimiento', category: 'ADMINISTRACION_Y_FINANZAS' },
+    { name: 'Hackathon de soluciones tecnológicas sustentables', category: 'SISTEMAS_COMPUTACIONALES' }
+  ];
 
+  for (const contest of contests) {
+    await prisma.contest.create({
+      data: { name: contest.name, categoryId: categories[contest.category] },
+    });
+  }
   // ─────────────────────────────────────────────────────────
   // D. IDIOMAS GLOBALES
   // ─────────────────────────────────────────────────────────
-  await prisma.language.create({ data: { name: 'Inglés' } });
-  await prisma.language.create({ data: { name: 'Alemán' } });
-  await prisma.language.create({ data: { name: 'Francés' } });
+  const languages = ['Inglés', 'Alemán', 'Francés', 'Portugués', 'Español', 'Japonés', 'Chino'];
 
+  for (const lang of languages) {
+    await prisma.language.create({
+      data: { name: lang },
+    });
+  }
   // ─────────────────────────────────────────────────────────
   // E. SKILLS / NIVELES CEFR
   // ─────────────────────────────────────────────────────────
@@ -306,16 +350,29 @@ async function main() {
   // ─────────────────────────────────────────────────────────
   // F. ÁREAS DE EXPERTISE
   // ─────────────────────────────────────────────────────────
-  await prisma.areaExpertise.create({
-    data: { name: 'Desarrollo Backend e Infraestructura' },
-  });
-  await prisma.areaExpertise.create({
-    data: { name: 'Ciberseguridad y Auditoría de Sistemas' },
-  });
-  await prisma.areaExpertise.create({
-    data: { name: 'Ingeniería de Datos y Pipelines NLP' },
-  });
+  const areasExp = [
+    'Desarrollo Backend e Infraestructura',
+    'Ciberseguridad y Auditoría de Sistemas',
+    'Ingeniería de Datos y Pipelines NLP',
+    'Inteligencia Artificial y Machine Learning',
+    'Desarrollo Frontend y Experiencia de Usuario',
+    'Análisis de Datos y Business Intelligence',
+    'Arquitectura de Nube (Cloud Computing)',
+    'DevOps y Automatización de Procesos',
+    'Ciencia de Datos y Estadística Aplicada',
+    'Gestión de Proyectos Tecnológicos (Agile)',
+    'Desarrollo de Aplicaciones Móviles',
+    'Blockchain y Tecnologías Distribuidas',
+    'Administración de Bases de Datos',
+    'Consultoría Tecnológica y Transformación Digital',
+    'Investigación de Operaciones y Optimización'
+  ];
 
+  for (const area of areasExp) {
+    await prisma.areaExpertise.create({
+      data: { name: area },
+    });
+  }
   console.log('---- Seed cargado completo y en verde ----');
 }
 
