@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { CreateMessageDto, UpdateConversationDto } from './dto/chat.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -23,11 +33,16 @@ export class ChatController {
     return this.chatService.handleMessage(req.user.userId, dto);
   }
 
+  @Post('message/n8n')
+  async chatN8nWebhook(@Req() req, @Body() dto: CreateMessageDto) {
+    return this.chatService.chatN8nWebhook(req.user.userId, dto);
+  }
+
   @Patch('conversations/:id')
   async updateTitle(
-    @Req() req, 
-    @Param('id') id: string, 
-    @Body() dto: UpdateConversationDto
+    @Req() req,
+    @Param('id') id: string,
+    @Body() dto: UpdateConversationDto,
   ) {
     return this.chatService.updateTitle(id, req.user.userId, dto);
   }
