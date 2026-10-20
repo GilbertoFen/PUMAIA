@@ -1,41 +1,63 @@
-import { Controller, Post, Get, Body, Param } from '@nestjs/common';
+import { Controller, Post, Get, UseGuards, Req } from '@nestjs/common';
 import { AIResultService } from './ai-result.service';
-import { CreateAIResultDto } from './dto/create-ai-result.dto';
+import { AuthGuard } from '@nestjs/passport';
 
-@Controller('ai-result')
+@Controller('ai-analysis')
+@UseGuards(AuthGuard('jwt'))
 export class AIResultController {
-  constructor(private readonly service: AIResultService) { }
-  @Post()
-  async save(@Body() dto: CreateAIResultDto) {
-    const res = await this.service.create(dto);
+  constructor(private readonly aiResultService: AIResultService) { }
+
+  @Get('current')
+  async getCurrentAnalysis(@Req() req) {
+    const studentId = req.user.userId;
+    const results = await this.aiResultService.findByStudent(studentId);
+
+    if (!results || results.length === 0) {
+      return { hasAnalysis: false, data: null };
+    }
+
+    const latest = results[0];
+    const parts = latest.descriptionA.split('||');
+    const fechaSimulada = new Date().toLocaleDateString('es-MX', {
+      year: 'numeric', month: 'long', day: 'numeric'
+    });
 
     return {
-      message: "Resultado de IA generado con éxito",
-      student: res.student.name,
-      category: res.category.name,
-      test_id: res.id
+      hasAnalysis: true,
+      data: {
+        optionA: latest.optionA,
+        descriptionA: parts[0],
+        meta_summary: parts[1] || '',
+        meta_strengths: parts[2] || '',
+        meta_opportunities: parts[3] || '',
+        optionB: latest.optionB,
+        descriptionB: latest.descriptionB,
+        optionC: latest.optionC,
+        descriptionC: latest.descriptionC,
+        optionD: latest.optionD,
+        descriptionD: latest.descriptionD,
+        optionE: latest.optionE,
+        descriptionE: latest.descriptionE,
+        createdAt: fechaSimulada
+      }
     };
   }
 
-  @Get('student/:id')
-  async getResults(@Param('id') id: string) {
-    const results = await this.service.findByStudent(id);
+  @Post('generate')
+  async generateAnalysis(@Req() req) {
+    const studentId = req.user.userId;
+    const aiData = await this.aiResultService.processAndSaveAnalysis(studentId);
 
-    return results.map(r => ({
-      date_id: r.id,
-      category: r.category.name,
-      recommendations: [
-        { label: r.optionA, desc: r.descriptionA },
-        { label: r.optionB, desc: r.descriptionB },
-        { label: r.optionC, desc: r.descriptionC },
-        { label: r.optionD, desc: r.descriptionD },
-        { label: r.optionE, desc: r.descriptionE },
-      ]
-    }));
-  }
-  
-  @Get('student/:id')
-  getByStudent(@Param('id') id: string) {
-    return this.service.getByStudent(id);
+    const fechaSimulada = new Date().toLocaleDateString('es-MX', {
+      year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    return {
+      hasAnalysis: true,
+      data: {
+        ...aiData,
+        createdAt: fechaSimulada
+      }
+    };
   }
 }

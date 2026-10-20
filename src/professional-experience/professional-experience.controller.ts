@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Delete,Request, Body, Param, Patch, UseGuards } from '@nestjs/common';
 import { ProfessionalExperienceService } from './professional-experience.service';
 import { CreateProfessionalExperienceDto } from './dto/create-professional-experience.dto';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('professional-experience')
+@UseGuards(AuthGuard('jwt'))
 export class ProfessionalExperienceController {
     constructor(private readonly service: ProfessionalExperienceService) { }
 
@@ -10,7 +12,7 @@ export class ProfessionalExperienceController {
     async assign(@Body() dto: CreateProfessionalExperienceDto) {
         const record = await this.service.assign(dto);
 
-         return {
+        return {
             message: 'Experiencia asignada correctamente',
             assignment: {
                 student: record.student.name,
@@ -24,7 +26,7 @@ export class ProfessionalExperienceController {
     async getStudentExperience(@Param('id') id: string) {
         const experiences = await this.service.findByStudent(id);
 
-         return {
+        return {
             total: experiences.length,
             skills: experiences.map(exp => ({
                 id_relacion: exp.id,
@@ -32,6 +34,21 @@ export class ProfessionalExperienceController {
                 categoria: exp.categoryId
             }))
         };
+    }
+    @Patch(':id')
+    async update(
+        @Param('id') id: string,
+        @Body() dto: { areaExpertiseId?: string; categoryId?: string }
+    ) {
+        return this.service.update(id, dto);
+    }
+    @Post('analyze')
+    async analyzeExperience(
+        @Request() req: any,
+        @Body('text') text: string // Extraemos el texto libre del JSON
+    ) {
+        const studentId = req.user.userId;
+        return this.service.parseAndSaveExperience(studentId, text);
     }
 
     @Delete(':id')

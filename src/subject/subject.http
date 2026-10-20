@@ -1,0 +1,7 @@
+POST http://localhost:3001/api/subjects
+Content-Type: application/json
+
+{
+    "subject" : "Calculo 1",
+    "categoryID": "c415cf14-19ac-4a12-a8bc-8ca58fea54ea"
+}

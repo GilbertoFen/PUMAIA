@@ -1,4 +1,4 @@
-import { Injectable} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateContestDto } from './dto/create-contest.dto';
 import { EnrollStudentDto } from './dto/enroll-student.dto';
@@ -20,23 +20,15 @@ export class ContestService {
         contestId: dto.contestId,
       },
       include: {
-        contest: true, 
+        contest: true,
         student: true,
       },
     });
   }
 
   async findAll() {
-    return await this.prisma.student.findMany({
-      include: {
-        contests: {
-          include: {
-            contest: true  
-          }
-        },
-        aiResults: true    
-      }
-    });
+    // Consultamos directamente el catálogo global de concursos
+    return await this.prisma.contest.findMany();
   }
   async findByStudent(studentId: string) {
     return await this.prisma.studentContest.findMany({
@@ -64,5 +56,19 @@ export class ContestService {
     }
 
     return student;
+  }
+  // En tu contest.service.ts
+  async updateEnrollment(id: string, dto: { contestId: string }) {
+    return await this.prisma.studentContest.update({
+      where: { id },
+      data: { contestId: dto.contestId },
+      include: { contest: true }
+    });
+  }
+
+  async removeEnrollment(id: string) {
+    return await this.prisma.studentContest.delete({
+      where: { id }
+    });
   }
 }

@@ -6,14 +6,14 @@ import { UpdateCareerDto } from "./dto/updateCareer.dto";
 
 
 @Injectable()
-export class CareerService{
-    constructor (private prisma: PrismaService) {}
+export class CareerService {
+    constructor(private prisma: PrismaService) { }
 
     //GET
-    async getAllCareers(){
-        try{
+    async getAllCareers() {
+        try {
             return await this.prisma.career.findMany();
-        } catch(error){
+        } catch (error) {
             console.log("ERROR EN GEL ALL CAREERS", error);
             throw error;
         }
@@ -32,22 +32,40 @@ export class CareerService{
 
     //CREATE
     async createCareer(dto: CreateCareerDto) {
-            try {
-                return await this.prisma.career.create({
-                    data: { ...dto },
-                });
-            } catch (error) {
-                console.error('ERROR EN CREATE CAREER:', error);
-                throw error;
-            }
+        try {
+            return await this.prisma.career.create({
+                data: {
+                    name: dto.name,
+                    isMasters: dto.isMasters,
+                    studyPlan: {
+                        connect: { id: dto.studyPlanID },
+                    },
+                    knowledgeArea: {
+                        connect: { id: dto.knowledgeAreaID },
+                    },
+                },
+            });
+        } catch (error) {
+            console.error('ERROR EN CREATE CAREER:', error);
+            throw error;
+        }
     }
 
     //UPDATE
-    async updateCareer(id: string, dto: UpdateCareerDto){
+    async updateCareer(id: string, dto: UpdateCareerDto) {
         try {
             return await this.prisma.career.update({
                 where: { id },
-                data: { ...dto },
+                data: {
+                    name: dto.name,
+                    isMasters: dto.isMasters,
+                    studyPlan: {
+                        connect: { id: dto.studyPlanID },
+                    },
+                    knowledgeArea: {
+                        connect: { id: dto.knowledgeAreaID },
+                    },
+                },
             });
         } catch (error) {
             console.error('ERROR EN UPDATE CAREER:', error);
@@ -56,12 +74,12 @@ export class CareerService{
     }
 
     //DELETE
-    async deleteCareer(id: string){
+    async deleteCareer(id: string) {
         try {
             return await this.prisma.career.delete({
                 where: { id }
             })
-        } catch(error){
+        } catch (error) {
             console.error('ERROR EN DELETE CAREER:', error);
             throw error;
         }

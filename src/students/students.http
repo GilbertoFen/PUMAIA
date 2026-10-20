@@ -1,19 +1,96 @@
 ### POST 
-POST http://localhost:3001/api/students
+POST http://localhost:3001/api/autenticacion/register
 Content-Type: application/json
 
 {
-  "accountNumber": 321191300,
-  "name": "JOAQUIN RACIEL",
-  "lastNameP": "RESENDIZ",
-  "lastNameM": "RODRIGUEZ",
-  "interest": "BELGICA",
-  "currentSemester": 6,
-  "average": 9.2
+  "accountNumber": 31500000,
+  "name": "Gilberto",
+  "lastNameP": "Gómez",
+  "lastNameM": "Pérez",
+  "email": "gil@correo.com",
+  "password": "Password123!",
+  "currentSemester": 6
+}
+###
+POST http://localhost:3001/api/autenticacion/login
+Content-Type: application/json
+
+{
+  "accountNumber": 100003,
+  "password": "12345678"
 }
 
 ### GET 
-GET http://localhost:3001/api/students
+GET http://localhost:3001/api/students/32@pcpuma.acatlan.com
 
 ###
-GET http://localhost:3001/api/students/321191311
+GET http://localhost:3001/api/students/account/321191300
+###
+GET http://localhost:3001/api/students/profile-summary
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2YzhjNzcwYi0yMjM5LTQ5MjgtOWM3Zi1kMzcxNDNiMjBhYTUiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc5MDA0MzczLCJleHAiOjE3NzkwMTE1NzN9.V93ugUPVdqk7hRNznA73h5No_98_GeNk2VwZzmA-fp8
+
+###
+PATCH http://localhost:3001/api/students/interests
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2YzhjNzcwYi0yMjM5LTQ5MjgtOWM3Zi1kMzcxNDNiMjBhYTUiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc5MDA0MzczLCJleHAiOjE3NzkwMTE1NzN9.V93ugUPVdqk7hRNznA73h5No_98_GeNk2VwZzmA-fp8
+Content-Type: application/json
+
+{
+  "interest": "Desarrollo web, Programación en C, Inteligencia Artificial, Ciberseguridad"
+}
+
+###
+POST http://localhost:3001/api/questionnaire/save
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2YzhjNzcwYi0yMjM5LTQ5MjgtOWM3Zi1kMzcxNDNiMjBhYTUiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc5MDA0MzczLCJleHAiOjE3NzkwMTE1NzN9.V93ugUPVdqk7hRNznA73h5No_98_GeNk2VwZzmA-fp8
+Content-Type: application/json
+
+{
+  "answers": [
+    {
+      "questionId": "p1_interes_area",
+      "question": "¿Qué área de MAC te llama más la atención?",
+      "answer": "Desarrollo de Software y Cloud Computing"
+    },
+    {
+      "questionId": "p2_tecnologias_chips",
+      "question": "Selecciona las tecnologías con las que has interactuado:",
+      "answer": ["C++", "TypeScript", "SQL", "HTML/CSS"]
+    },
+    {
+      "questionId": "p3_experiencia_objeto",
+      "question": "¿Cuentas con experiencia laboral previa?",
+      "answer": {
+        "answer": "Sí",
+        "exp": "6 meses como becario de soporte y bases de datos"
+      }
+    },
+    {
+      "questionId": "p4_modalidad_trabajo",
+      "question": "¿Qué modalidad de trabajo prefieres?",
+      "answer": "Remoto o Híbrido"
+    }
+  ]
+}
+###
+POST http://localhost:3001/api/students/6d50f58c-dc0a-4059-b026-920f05841a03/avatar
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2ZDUwZjU4Yy1kYzBhLTQwNTktYjAyNi05MjBmMDU4NDFhMDMiLCJuYW1lIjoiR2lsYmVydG8iLCJhY2NvdW50TnVtYmVyIjozMTUwMDAwMCwiaWF0IjoxNzc5Njc1NjY4LCJleHAiOjE3Nzk2ODI4Njh9.uwe735WNzwDiT5edPOCYi7qS5GWZOCzx2DxZbeSoSNA
+
+
+###
+PATCH http://localhost:3001/api/questionnaire/update
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI3NTMwYWUwYS03MmJkLTQwMDUtYmY2NC02MWUxZjZiNjQ5MDkiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc5Njc5MzU1LCJleHAiOjE3Nzk2ODY1NTV9.RJGqqfqlVlsGSwo0e-N6tSZZIN_NdSEwp8ckdMFrMSQ
+Content-Type: application/json
+
+{
+  "answers": [
+    {
+      "questionId": "p2_tecnologias_chips",
+      "question": "Selecciona las tecnologías con las que has interactuado:",
+      "answer": ["C++", "TypeScript", "SQL", "HTML/CSS", "NestJS"] 
+    },
+    {
+      "questionId": "p4_modalidad_trabajo",
+      "question": "¿Qué modalidad de trabajo prefieres?",
+      "answer": "100% Presencial"
+    }
+  ]
+}

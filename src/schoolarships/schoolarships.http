@@ -1,0 +1,22 @@
+POST http://localhost:3001/api/schoolarships
+Content-Type: application/json
+
+{
+    "name": "Beca Santander",
+    "categoryId":"e9dcfa15-0f22-455d-828d-d43c28c10489"
+}
+
+###
+POST http://localhost:3001/api/schoolarships/assign
+Content-Type: application/json
+
+{
+    "schoolarshipId":"e6575758-2e87-4cd8-b134-dc5e957a787c",
+    "studentId":"d2ee86f2-8174-4f57-a9b9-db6c70db8342"
+
+}
+###
+GET http://localhost:3001/api/schoolarships
+
+
+

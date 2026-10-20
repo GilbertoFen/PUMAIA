@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreateAdressDto } from './dto/create-adress.dto';
 import { UpdateAdressDto } from './dto/update-adress.dto';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateEstadoDto } from './dto/create-estado.dto';
 import { UpdateSpecDto } from './dto/update-estado.dto';
 
@@ -10,14 +10,24 @@ export class AdressesService {
 
   constructor(private prisma: PrismaService) { }
 
-
   //CREATE
   async create(data: CreateAdressDto) {
-    return this.prisma.address.create({ data });
+    return this.prisma.address.create(
+      {
+        data: {
+          street: data.calle,
+          zipCode: data.cp,
+          coloniaId: data.coloniaId,
+          municipioId: data.municipioId,
+          stateId: data.estadoId,
+        }
+        ,
+      }
+    );
   }
 
   async createEstado(createEstadoDto: CreateEstadoDto) {
-    return this.prisma.estado.create({
+    return this.prisma.state.create({
       data: { name: createEstadoDto.name },
     });
   }
@@ -32,10 +42,10 @@ export class AdressesService {
 
   //GET
   async findAllEstados() {
-    return this.prisma.estado.findMany();
+    return this.prisma.state.findMany();
   }
   async findEstadoById(id: string) {
-    return this.prisma.estado.findUnique({ where: { id } });
+    return this.prisma.state.findUnique({ where: { id } });
   }
   async findAllMunicipios() {
     return this.prisma.municipio.findMany();
@@ -64,7 +74,7 @@ export class AdressesService {
   }
 
   updateEstado(id: string, updateEstadoDto: UpdateSpecDto) {
-    return this.prisma.estado.update({ where: { id }, data: { name: updateEstadoDto.name } });
+    return this.prisma.state.update({ where: { id }, data: { name: updateEstadoDto.name } });
   }
   updateMunicipio(id: string, updateEstadoDto: UpdateSpecDto) {
     return this.prisma.municipio.update({ where: { id }, data: { name: updateEstadoDto.name } });

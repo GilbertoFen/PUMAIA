@@ -1,0 +1,8 @@
+POST http://localhost:3001/api/student-career
+Content-Type : application/json
+
+{
+    "careerId" : "b07616b2-0799-4611-9e56-56a947f390a1",
+    "studentId":"590cc826-733e-4cba-937a-60ad057c7e7b",
+    "isGraduated": false
+}

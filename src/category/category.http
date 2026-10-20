@@ -1,0 +1,7 @@
+POST http://localhost:3001/api/category
+Content-Type: application/json
+
+{
+    "category" : "MODELADO_ESTOCASTICO"
+
+}

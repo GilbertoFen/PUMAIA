@@ -1,5 +1,5 @@
 export class UpdateLanguageUserDto {
-    userId?: string;
+    studentId?: string;
     languageId?: string;
     skillId?: string;
 }

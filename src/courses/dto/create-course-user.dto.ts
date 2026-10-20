@@ -6,5 +6,5 @@ export class CreateCourseUserDto {
     courseId: string;
     @IsUUID()
     @IsNotEmpty()
-    userId: string;
+    studentId: string;
 }

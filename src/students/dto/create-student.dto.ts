@@ -32,4 +32,15 @@ export class CreateStudentDto {
   @Min(0)
   @Max(10)
   average!: number;
+  
+  @IsString()
+  @IsNotEmpty()
+  email: string;
+
+  @IsString()
+  @IsNotEmpty()
+  password: string;
+
+  @IsString()
+  addressId : string;
 }

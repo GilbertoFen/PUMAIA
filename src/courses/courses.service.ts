@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCourseUserDto } from './dto/create-course-user.dto';
 import { UpdateCourseUserDto } from './dto/update-course-user.dto';
 
@@ -18,7 +18,7 @@ export class CoursesService {
   }
 
   createCourseUser(createCourseUserDto: CreateCourseUserDto) {
-    return this.prisma.courseUser.create({
+    return this.prisma.studentCourse.create({
       data: createCourseUserDto
     });
   }
@@ -34,15 +34,15 @@ export class CoursesService {
   }
   
   findCourseUsers(courseId: string) {
-    return this.prisma.courseUser.findMany({
+    return this.prisma.studentCourse.findMany({
       where: { courseId },
-      include: { user: true }
+      include: { student: true }
     });
   }
 
-  findCourseUsersByUserId(userId: string) {
-    return this.prisma.courseUser.findMany({
-      where: { userId },
+  findCourseUsersByUserId(studentId: string) {
+    return this.prisma.studentCourse.findMany({
+      where: { studentId },
       include: { course: true }
     });
   }
@@ -61,14 +61,14 @@ export class CoursesService {
   }
 
   updateCourseUser(id: string, updateCourseUserDto: UpdateCourseUserDto) {
-    return this.prisma.courseUser.update({
+    return this.prisma.studentCourse.update({
       where: { id },
       data: updateCourseUserDto
     });
   }
 
   removeCourseUser(id: string) {
-    return this.prisma.courseUser.delete({
+    return this.prisma.studentCourse.delete({
       where: { id }
     });
   }

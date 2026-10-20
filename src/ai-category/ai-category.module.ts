@@ -4,6 +4,7 @@ import { AICategoryController } from './ai-category.controller';
 
 @Module({
   providers: [AICategoryService],
-  controllers: [AICategoryController]
+  controllers: [AICategoryController],
+  exports: [AICategoryService], 
 })
 export class AICategoryModule {}

@@ -1,0 +1,8 @@
+###
+POST http://localhost:3001/api/study-plan/
+Content-Type: application/json
+
+{
+    "studyPlan" : "2014",
+    "semesters" : 8
+}
