@@ -1,3 +1,11 @@
+// =====================================================================
+// PumaIA: esquema v3 (refactor del schema actual)
+// Convenciones: modelos en inglés; tablas y columnas en español vía @map (como el schema actual).
+// Marcas: [NUEVO] tabla nueva · [CAMBIA] tabla existente modificada · [IGUAL] sin cambios.
+// Los campos "...By" / "...ById" que guardan quién hizo algo son ids de User SIN relación,
+// para no llenar de relaciones nombradas; la integridad se valida en la app.
+// =====================================================================
+
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["views"]
@@ -7,75 +15,728 @@ datasource db {
   provider = "postgresql"
 }
 
+// =====================================================================
+// 1. INSTITUCIÓN, USUARIOS Y ROLES
+// =====================================================================
+
+// [NUEVO] Hoy habrá una sola fila (FES Acatlán). Deja listo el multi-institución.
+model Institution {
+  id        String              @id @default(uuid()) @map("id_institucion")
+  name      String              @map("nombre")
+  code      String              @unique @map("clave") // plantel UNAM, ej. 240
+  createdAt DateTime            @default(now()) @map("creado_en")
+  users     User[]
+  careers   Career[]
+  periods   AcademicPeriod[]
+  documents KnowledgeDocument[]
+
+  @@map("institucion")
+}
+
+enum UserStatus {
+  INVITED // creado desde un horario o lista; aún no inicia sesión con Google
+  ACTIVE
+  DELETED
+}
+
+// [NUEVO] La cuenta: identidad compartida por alumno, profesor y administrador.
+// Saca de Student: nombre, apellidos, correo, avatar. La contraseña desaparece (entra con Google).
+model User {
+  id              String                  @id @default(uuid()) @map("id_usuario")
+  institutionId   String                  @map("id_institucion")
+  institution     Institution             @relation(fields: [institutionId], references: [id])
+  email           String                  @unique @map("correo") // en minúsculas
+  googleSub       String?                 @unique @map("google_sub") // id estable de Google
+  emailVerifiedAt DateTime?               @map("correo_verificado_en")
+  name            String                  @map("nombre")
+  lastNameP       String                  @map("apellido_paterno")
+  lastNameM       String?                 @map("apellido_materno")
+  avatarUrl       String?                 @map("avatar_url")
+  status          UserStatus              @default(ACTIVE) @map("estado")
+  lastLoginAt     DateTime?               @map("ultimo_acceso_en")
+  createdAt       DateTime                @default(now()) @map("creado_en")
+  deletedAt       DateTime?               @map("eliminado_en")
+  roles           UserRole[]
+  student         Student?
+  professor       Professor?
+  personalProfile PersonalProfile?
+  contactMethods  ContactMethod[]
+  consents        ConsentRecord[]
+  notifPrefs      NotificationPreference?
+
+  @@index([institutionId])
+  @@map("usuario")
+}
+
+enum RoleType {
+  STUDENT
+  PROFESSOR
+  INSTITUTION_ADMIN
+  ANALYST
+}
+
+// [NUEVO] Una persona puede tener varios roles (ej. alumno de posgrado que da clase).
+// El rol de profesor o administrador lo concede un administrador, nunca se autoasigna.
+model UserRole {
+  id        String   @id @default(uuid()) @map("id_rol_usuario")
+  userId    String   @map("id_usuario")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      RoleType @map("rol")
+  grantedBy String?  @map("otorgado_por") // id del User administrador que lo concedió
+  grantedAt DateTime @default(now()) @map("otorgado_en")
+
+  @@unique([userId, role])
+  @@map("rol_usuario")
+}
+
+// [NUEVO] Datos personales opcionales, 1 a 1 con la cuenta. Del cumpleaños solo día y mes.
+model PersonalProfile {
+  userId        String   @id @map("id_usuario")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferredName String?  @map("nombre_preferido")
+  birthDay      Int?     @map("dia_nacimiento")
+  birthMonth    Int?     @map("mes_nacimiento")
+  aboutMe       String?  @map("acerca_de_mi") @db.Text
+  updatedAt     DateTime @updatedAt @map("actualizado_en")
+
+  @@map("perfil_personal")
+}
+
+enum ContactType {
+  EMAIL
+  PHONE
+  LINKEDIN
+  GITHUB
+  WEBSITE
+  OTHER
+}
+
+enum Visibility {
+  PRIVATE
+  INSTITUTION
+  PUBLIC
+}
+
+// [NUEVO] Todo lo que se repite: correos, teléfonos, LinkedIn, GitHub, sitios.
+// Reemplaza Professor.email / Professor.phone y evita una tabla de sitios por separado.
+model ContactMethod {
+  id         String      @id @default(uuid()) @map("id_metodo_contacto")
+  userId     String      @map("id_usuario")
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       ContactType @map("tipo")
+  label      String?     @map("etiqueta")
+  value      String      @map("valor")
+  isPrimary  Boolean     @default(false) @map("es_principal")
+  visibility Visibility  @default(PRIVATE) @map("visibilidad")
+  createdAt  DateTime    @default(now()) @map("creado_en")
+
+  @@index([userId])
+  @@map("metodo_contacto")
+}
+
+// =====================================================================
+// 2. CONSENTIMIENTO, PRIVACIDAD Y AUDITORÍA
+// =====================================================================
+
+enum ConsentKind {
+  TERMS_AND_NOTICE // obligatorio para usar la plataforma
+  ANALYTICS // opcional: análisis agregado de conversaciones
+  IMPROVEMENT // opcional: usar mis conversaciones para mejorar el asistente
+}
+
+// [NUEVO] Texto exacto de cada versión del aviso.
+model PrivacyNotice {
+  id          String          @id @default(uuid()) @map("id_aviso")
+  kind        ConsentKind     @map("tipo")
+  version     String
+  text        String          @map("texto") @db.Text
+  publishedAt DateTime        @default(now()) @map("publicado_en")
+  records     ConsentRecord[]
+
+  @@unique([kind, version])
+  @@map("aviso_privacidad")
+}
+
+// [NUEVO] Historial append-only. El estado vigente es la fila más reciente por usuario y tipo.
+// Retirar el consentimiento = insertar una fila nueva con granted = false.
+model ConsentRecord {
+  id        String        @id @default(uuid()) @map("id_consentimiento")
+  userId    String        @map("id_usuario")
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  noticeId  String        @map("id_aviso")
+  notice    PrivacyNotice @relation(fields: [noticeId], references: [id])
+  kind      ConsentKind   @map("tipo")
+  granted   Boolean       @map("otorgado")
+  createdAt DateTime      @default(now()) @map("creado_en")
+
+  @@index([userId, kind, createdAt])
+  @@map("consentimiento")
+}
+
+// [NUEVO] Quién consultó o cambió qué (dashboard, exportaciones, correcciones manuales de asistencia).
+model AuditLog {
+  id        String   @id @default(uuid()) @map("id_bitacora")
+  actorType String   @map("tipo_actor") // ADMIN | PROFESSOR | SYSTEM | N8N
+  actorId   String?  @map("id_actor")
+  action    String   @map("accion")
+  detail    Json?    @map("detalle")
+  createdAt DateTime @default(now()) @map("creado_en")
+
+  @@index([actorId, createdAt])
+  @@map("bitacora_auditoria")
+}
+
+// =====================================================================
+// 3. ALUMNO Y TRAYECTORIA ACADÉMICA
+// =====================================================================
+
+// [CAMBIA] Pierde: name, lastNameP, lastNameM, email, password, avatarUrl (ahora en User).
+// Gana: userId (1 a 1) y careerId. average pasa de Int a Decimal.
+// Grades se reemplaza por Enrollment. Conserva el id para no romper las llaves foráneas actuales.
 model Student {
-  id              String                   @id @default(uuid()) @map("id_alumno")
-  accountNumber   Int                      @unique @map("numero_cuenta")
-  name            String                   @map("nombre")
-  lastNameP       String                   @map("apellido_paterno")
-  lastNameM       String                   @map("apellido_materno")
-  interest        String?                  @map("interes")
-  currentSemester Int                      @map("semestre_actual")
-  average         Int?                      @map("promedio")
-  email           String                   @unique @map("correo")
-  password        String                   @map("contrasena")
-  addressId       String?                  @map("id_direccion")
-  address         Address?                 @relation(fields: [addressId], references: [id])
-  avatarUrl      String?                    @map("avatar_url")
-  hasCompletedQuiz Boolean  @default(false) @map("cuestionario_completado")
-  answers         QuestionnaireAnswer[]
-  chats           Conversation[]
-  schoolarships   StudentSchoolarship[]
-  grades          Grades[]
-  careers         StudentCareer[]
-  contests        StudentContest[]
-  courses         StudentCourse[]
-  experiences     ProfessionalExperience[]
-  languages       StudentLanguage[]
-  aiResults       AIResult[]
+  id                  String                @id @default(uuid()) @map("id_alumno")
+  userId              String                @unique @map("id_usuario")
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountNumber       Int                   @unique @map("numero_cuenta") // Int quita los ceros a la izquierda
+  careerId            String                @map("id_carrera")
+  career              Career                @relation(fields: [careerId], references: [id])
+  isGraduated         Boolean               @default(false) @map("es_egresado")
+  interest            String?               @map("interes")
+  currentSemester     Int                   @map("semestre_actual")
+  average             Decimal?              @map("promedio") @db.Decimal(4, 2)
+  hasCompletedQuiz    Boolean               @default(false) @map("cuestionario_completado")
+  addressId           String?               @map("id_direccion")
+  address             Address?              @relation(fields: [addressId], references: [id])
+  responses             Response[]
+  chats               Conversation[]
+  schoolarships       StudentSchoolarship[]
+  enrollments         Enrollment[]
+  contests            StudentContest[]
+  courses             StudentCourse[]
+  experiences         ProfessionalExperience[]
+  languages           StudentLanguage[]
+  aiResults           AIResult[]
+  snapshots           AcademicSnapshot[]
+  attendance          AttendanceRecord[]
+  rosterEntries       SectionRoster[]
+  summaries           PsychologicalSummary[]
 
   @@map("alumno")
 }
 
-model QuestionnaireAnswer {
-  id         String            @id @default(uuid()) @map("id_respuesta")
-  studentId  String            @map("id_alumno")
-  student    Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  
-  questionId String            @map("id_pregunta")
-  categoria  CategoriaPregunta @map("categoria")
-  answer     Json              @map("respuesta")
-  
-  createdAt  DateTime          @default(now()) @map("creado_en")
-  updatedAt  DateTime          @updatedAt @map("actualizado_en")
+// [NUEVO] Periodos como catálogo ("2026-1") en lugar de texto libre repetido.
+model AcademicPeriod {
+  id            String          @id @default(uuid()) @map("id_periodo")
+  institutionId String          @map("id_institucion")
+  institution   Institution     @relation(fields: [institutionId], references: [id])
+  code          String          @map("clave") // "2026-1"
+  startsAt      DateTime?       @map("inicia_en") @db.Date
+  endsAt        DateTime?       @map("termina_en") @db.Date
+  enrollments   Enrollment[]
+  sections      CourseSection[]
+  imports       ScheduleImport[]
+  responses     Response[]
+  snapshots     AcademicSnapshot[]
 
-  @@unique([studentId, questionId])
-  @@map("respuestas_cuestionario")
+  @@unique([institutionId, code])
+  @@map("periodo_academico")
 }
 
-model Conversation {
-  id         String    @id @default(uuid()) @map("id_conversacion")
-  studentId  String    @map("id_alumno")
-  student    Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  
-  title      String?   @map("titulo") 
-  createdAt  DateTime  @default(now()) @map("creado_en")
-  updatedAt  DateTime  @updatedAt @map("actualizado_en")
-  messages   Message[]
+enum EnrollmentStatus {
+  IN_PROGRESS
+  PASSED
+  FAILED
+  NOT_PRESENTED // NP
+  WITHDRAWN // baja
+}
 
+enum EnrollmentSource {
+  TRANSCRIPT // leído del historial académico (PDF)
+  JOIN_CODE // el alumno entró al grupo con el código
+}
+
+enum EnrollmentVerification {
+  UNVERIFIED
+  PROFESSOR_CONFIRMED
+}
+
+// [NUEVO] Reemplaza a Grades. Una fila por alumno, materia y periodo.
+// attempt >= 2 es recursamiento; sectionId dice con qué grupo (y profesor) la cursó.
+// periodId es opcional solo para poder migrar las calificaciones viejas, que no traen periodo.
+model Enrollment {
+  id           String                 @id @default(uuid()) @map("id_inscripcion")
+  studentId    String                 @map("id_alumno")
+  student      Student                @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subjectId    String                 @map("id_materia")
+  subject      Subject                @relation(fields: [subjectId], references: [id])
+  periodId     String?                @map("id_periodo")
+  period       AcademicPeriod?        @relation(fields: [periodId], references: [id])
+  sectionId    String?                @map("id_grupo")
+  section      CourseSection?         @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  grade        Int?                   @map("calificacion") // 5 a 10
+  status       EnrollmentStatus       @default(IN_PROGRESS) @map("estado")
+  attempt      Int                    @default(1) @map("intento")
+  source       EnrollmentSource       @default(TRANSCRIPT) @map("origen")
+  verification EnrollmentVerification @default(UNVERIFIED) @map("verificacion")
+  createdAt    DateTime               @default(now()) @map("creado_en")
+
+  @@unique([studentId, subjectId, periodId])
+  @@index([studentId])
+  @@index([sectionId])
+  @@map("inscripcion")
+}
+
+// [NUEVO] Una fila por periodo, tomada de la tira o historial que sube el alumno (PDF no verificado).
+// Conteos de reprobadas, recursamientos y carga salen de Enrollment, no se duplican aquí.
+model AcademicSnapshot {
+  id                String         @id @default(uuid()) @map("id_historial")
+  studentId         String         @map("id_alumno")
+  student           Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  periodId          String         @map("id_periodo")
+  period            AcademicPeriod @relation(fields: [periodId], references: [id])
+  semester          Int            @map("semestre")
+  gpaCumulative     Decimal        @map("promedio_acumulado") @db.Decimal(4, 2)
+  gpaTerm           Decimal?       @map("promedio_periodo") @db.Decimal(4, 2)
+  creditsCumulative Int            @map("creditos_acumulados")
+  uploadedAt        DateTime       @default(now()) @map("subido_en")
+
+  @@unique([studentId, periodId])
+  @@map("historial_academico")
+}
+
+// [CAMBIA] Gana institutionId. Hay que sembrar la FES Acatlán y asignarla a las carreras existentes.
+model Career {
+  id              String          @id @default(uuid()) @map("id_carrera")
+  institutionId   String          @map("id_institucion")
+  institution     Institution     @relation(fields: [institutionId], references: [id])
+  name            String          @map("nombre")
+  code            String          @map("clave") // clave de carrera UNAM, ej. 121
+  studyPlanId     String          @map("id_plan_estudios")
+  knowledgeAreaId String          @map("id_area_conocimiento")
+  isMasters       Boolean         @map("es_maestria")
+  knowledgeArea   KnowledgeArea   @relation(fields: [knowledgeAreaId], references: [id])
+  studyPlan       StudyPlan       @relation(fields: [studyPlanId], references: [id])
+  students        Student[]
+  conversations   Conversation[]
+
+  @@unique([institutionId, code])
+  @@map("carrera")
+}
+
+enum StudyLevel {
+  LICENCIATURA
+  MAESTRIA
+  DOCTORADO
+}
+
+enum StudySystem {
+  ESCOLARIZADO
+  ABIERTO
+  A_DISTANCIA
+}
+
+// [CAMBIA] Gana totalCredits (para calcular porcentaje de avance) y la relación con Subject.
+model StudyPlan {
+  id           String    @id @default(uuid()) @map("id_plan_estudios")
+  studyPlan    String    @map("plan_estudios")
+  semesters    Int       @map("cantidad_semestres")
+  totalCredits Int?      @map("creditos_totales")
+  optionalCredits Int?   @map("creditos_optativos")
+  firstGeneration Int?   @map("primera_generacion")
+  level        StudyLevel  @map("nivel")
+  system       StudySystem @map("sistema")
+  careers      Career[]
+  subjects     Subject[]
+
+  @@map("plan_estudios")
+}
+
+// [CAMBIA] Gana studyPlanId (para saber a qué plan pertenece cada materia) y prerrequisitos.
+// semester pasa de String a Int. Grades se reemplaza por enrollments.
+model Subject {
+  id            String                @id @default(uuid()) @map("id_materia")
+  subject       String                @map("materia")
+  categoryId    String                @map("id_categoria")
+  category      Category              @relation(fields: [categoryId], references: [id])
+  code          Int?                  @map("codigo")
+  semester      Int?                  @map("semestre")
+  credits       Int?                  @map("creditos")
+  studyPlanId   String?               @map("id_plan_estudios")
+  studyPlan     StudyPlan?            @relation(fields: [studyPlanId], references: [id])
+  enrollments   Enrollment[]
+  professors    ProfessorCourse[]
+  sections      CourseSection[]
+  prerequisites SubjectPrerequisite[] @relation("SubjectToPrereq")
+  requiredFor   SubjectPrerequisite[] @relation("PrereqOf")
+  responses     Response[]
+
+  @@unique([studyPlanId, code])
+  @@index([studyPlanId])
+  @@map("materia")
+}
+
+// [NUEVO] Seriación (candados): qué materia es prerrequisito de cuál.
+model SubjectPrerequisite {
+  subjectId      String  @map("id_materia")
+  subject        Subject @relation("SubjectToPrereq", fields: [subjectId], references: [id], onDelete: Cascade)
+  prerequisiteId String  @map("id_materia_requisito")
+  prerequisite   Subject @relation("PrereqOf", fields: [prerequisiteId], references: [id], onDelete: Cascade)
+
+  @@id([subjectId, prerequisiteId])
+  @@map("materia_seriacion")
+}
+
+// =====================================================================
+// 4. GRUPOS, LISTAS Y ASISTENCIA  (modelado; construir después del piloto mínimo)
+// =====================================================================
+
+// [NUEVO] El grupo real de una materia en un periodo. Nace del horario publicado.
+model CourseSection {
+  id            String          @id @default(uuid()) @map("id_grupo")
+  subjectId     String          @map("id_materia")
+  subject       Subject         @relation(fields: [subjectId], references: [id])
+  periodId      String          @map("id_periodo")
+  period        AcademicPeriod  @relation(fields: [periodId], references: [id])
+  professorId   String?         @map("id_profesor")
+  professor     Professor?      @relation(fields: [professorId], references: [id], onDelete: SetNull)
+  groupCode     String          @map("clave_grupo") // "1301"
+  capacity      Int?            @map("cupo")
+  joinCode      String          @unique @map("codigo_ingreso") // respaldo si el alumno no está en la lista
+  createdAt     DateTime        @default(now()) @map("creado_en")
+  meetings      SectionMeeting[]
+  roster        SectionRoster[]
+  rosterUploads RosterUpload[]
+  enrollments   Enrollment[]
+  sessions      ClassSession[]
+
+  @@unique([subjectId, periodId, groupCode])
+  @@index([professorId])
+  @@map("grupo")
+}
+
+// [NUEVO] Un grupo se reúne varios días; una fila por reunión. Sin esto no se detectan traslapes.
+model SectionMeeting {
+  id        String        @id @default(uuid()) @map("id_horario")
+  sectionId String        @map("id_grupo")
+  section   CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  weekday   Int           @map("dia_semana") // 1 lunes ... 7 domingo
+  startTime DateTime      @map("hora_inicio") @db.Time(0)
+  endTime   DateTime      @map("hora_fin") @db.Time(0)
+  room      String?       @map("salon")
+
+  @@index([sectionId])
+  @@map("horario_grupo")
+}
+
+// [NUEVO] De qué carga de horario salió cada dato.
+model ScheduleImport {
+  id         String         @id @default(uuid()) @map("id_importacion_horario")
+  periodId   String         @map("id_periodo")
+  period     AcademicPeriod @relation(fields: [periodId], references: [id])
+  uploadedBy String         @map("subido_por")
+  fileName   String?        @map("archivo")
+  rowCount   Int            @map("filas")
+  uploadedAt DateTime       @default(now()) @map("subido_en")
+
+  @@map("importacion_horario")
+}
+
+enum RosterOrigin {
+  PROFESSOR_LIST
+  JOIN_CODE
+}
+
+enum RosterStatus {
+  LISTED // está en la lista, sin cuenta vinculada
+  LINKED // se vinculó un alumno con cuenta
+  CONFIRMED // el profesor lo confirmó
+  REJECTED
+}
+
+// [NUEVO] La lista oficial del grupo, con la que se cotejan los números de cuenta.
+// Al confirmarse una fila se crea o actualiza el Enrollment correspondiente.
+model SectionRoster {
+  id              String        @id @default(uuid()) @map("id_lista_grupo")
+  sectionId       String        @map("id_grupo")
+  section         CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  accountNumber   Int           @map("numero_cuenta")
+  fullName        String        @map("nombre_completo")
+  linkedStudentId String?       @map("id_alumno_vinculado")
+  linkedStudent   Student?      @relation(fields: [linkedStudentId], references: [id], onDelete: SetNull)
+  origin          RosterOrigin  @map("origen")
+  status          RosterStatus  @default(LISTED) @map("estado")
+  confirmedBy     String?       @map("confirmado_por")
+  confirmedAt     DateTime?     @map("confirmado_en")
+
+  @@unique([sectionId, accountNumber])
+  @@index([linkedStudentId])
+  @@map("lista_grupo")
+}
+
+// [NUEVO] Quién subió cada lista. El archivo se borra tras leerlo.
+model RosterUpload {
+  id         String        @id @default(uuid()) @map("id_carga_lista")
+  sectionId  String        @map("id_grupo")
+  section    CourseSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  uploadedBy String        @map("subido_por")
+  rowCount   Int           @map("filas")
+  uploadedAt DateTime      @default(now()) @map("subido_en")
+
+  @@map("carga_lista")
+}
+
+enum SessionStatus {
+  OPEN
+  CLOSED
+}
+
+// [NUEVO] Una clase concreta. El QR rota cada 20 a 30 s y se calcula con `secret` y la hora (no hay tabla de tokens).
+model ClassSession {
+  id        String             @id @default(uuid()) @map("id_sesion_clase")
+  sectionId String             @map("id_grupo")
+  section   CourseSection      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  openedBy  String             @map("abierta_por")
+  startsAt  DateTime           @map("inicia_en")
+  closesAt  DateTime?          @map("cierra_en")
+  status    SessionStatus      @default(OPEN) @map("estado")
+  secret    String             @map("secreto")
+  records   AttendanceRecord[]
+
+  @@index([sectionId, startsAt])
+  @@map("sesion_clase")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  EXCUSED
+}
+
+enum AttendanceMethod {
+  QR
+  MANUAL
+}
+
+// [NUEVO] Al cerrar la clase se crean las ausencias de los inscritos que no escanearon.
+// Las correcciones manuales se registran también en AuditLog.
+model AttendanceRecord {
+  id        String           @id @default(uuid()) @map("id_asistencia")
+  sessionId String           @map("id_sesion_clase")
+  session   ClassSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId String           @map("id_alumno")
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status    AttendanceStatus @map("estado")
+  method    AttendanceMethod @map("metodo")
+  markedAt  DateTime         @default(now()) @map("marcada_en")
+  markedBy  String?          @map("marcada_por") // solo si fue manual
+
+  @@unique([sessionId, studentId])
+  @@map("asistencia")
+}
+
+// =====================================================================
+// 5. PROFESORES
+// =====================================================================
+
+// [CAMBIA] Pierde email y phone (ahora ContactMethod, vía User) y career (ahora ProfessorStudy).
+// Gana userId opcional: un profesor sin correo registrado no tiene User. entryDate pasa a startYear (Int).
+model Professor {
+  id                 String              @id @default(uuid()) @map("id_profesor")
+  userId             String?             @unique @map("id_usuario")
+  user               User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name               String              @map("nombre")
+  lastNameP          String              @map("apellido_p")
+  lastNameM          String?             @map("apellido_m")
+  academicCategoryId String?             @map("id_categoria_academica")
+  academicCategory   AcademicCategory?   @relation(fields: [academicCategoryId], references: [id])
+  startYear          Int?                @map("anio_ingreso")
+  active             Boolean             @default(true) @map("activo")
+  courses            ProfessorCourse[]
+  sections           CourseSection[]
+  studies            ProfessorStudy[]
+  publications       ProfessorPublication[]
+  categories         ProfessorCategory[]
+  aliases            ProfessorNameAlias[]
+
+  @@map("profesores")
+}
+
+// [NUEVO] Catálogo: Titular, Asociado, Asignatura, Ayudante...
+model AcademicCategory {
+  id         String      @id @default(uuid()) @map("id_categoria_academica")
+  name       String      @unique @map("nombre")
+  professors Professor[]
+
+  @@map("categoria_academica")
+}
+
+// [NUEVO] Carrera que estudió y otros estudios (licenciatura, maestría, doctorado).
+model ProfessorStudy {
+  id          String    @id @default(uuid()) @map("id_estudio_profesor")
+  professorId String    @map("id_profesor")
+  professor   Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  degree      String    @map("grado") // Licenciatura, Maestría, Doctorado...
+  field       String    @map("disciplina")
+  institution String?   @map("institucion")
+  year        Int?      @map("anio")
+
+  @@index([professorId])
+  @@map("estudio_profesor")
+}
+
+// [NUEVO]
+model ProfessorPublication {
+  id          String    @id @default(uuid()) @map("id_publicacion")
+  professorId String    @map("id_profesor")
+  professor   Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  title       String    @map("titulo")
+  year        Int?      @map("anio")
+  url         String?   @map("enlace")
+
+  @@index([professorId])
+  @@map("publicacion_profesor")
+}
+
+// [NUEVO] Áreas de conocimiento del profesor, reutilizando el catálogo Category.
+model ProfessorCategory {
+  professorId String    @map("id_profesor")
+  professor   Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  categoryId  String    @map("id_categoria")
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([professorId, categoryId])
+  @@map("categoria_profesor")
+}
+
+// [NUEVO] El horario publicado trae nombres escritos de formas distintas ("PÉREZ LÓPEZ JUAN").
+// Aquí se guardan las variantes para empatar la carga de horarios con un profesor.
+model ProfessorNameAlias {
+  id          String    @id @default(uuid()) @map("id_alias_profesor")
+  professorId String    @map("id_profesor")
+  professor   Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  alias       String    @unique @map("alias")
+
+  @@map("alias_profesor")
+}
+
+// [IGUAL] Qué materias imparte en general (catálogo). Lo que imparte este periodo vive en CourseSection.
+model ProfessorCourse {
+  id          String    @id @default(uuid()) @map("id_profesor_curso")
+  professorId String    @map("id_profesor")
+  subjectId   String    @map("id_materia")
+  notes       String?   @map("notas") @db.Text
+  professor   Professor @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([professorId, subjectId])
+  @@map("profesor_curso")
+}
+
+// =====================================================================
+// 6. CONVERSACIONES, CLASIFICACIÓN Y RETROALIMENTACIÓN
+// =====================================================================
+
+// [CAMBIA] Gana careerId y semestre al iniciar (para agregados sin unir con tablas de alumno),
+// endedAt y sensitive (marcada por el clasificador o por palabras clave; se excluye de agregados).
+model Conversation {
+  id              String              @id @default(uuid()) @map("id_conversacion")
+  studentId       String              @map("id_alumno")
+  student         Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  careerId        String?             @map("id_carrera")
+  career          Career?             @relation(fields: [careerId], references: [id])
+  semesterAtStart Int?                @map("semestre_al_iniciar")
+  title           String?             @map("titulo")
+  sensitive       Boolean             @default(false) @map("sensible")
+  createdAt       DateTime            @default(now()) @map("creado_en")
+  updatedAt       DateTime            @updatedAt @map("actualizado_en")
+  messages        Message[]
+  labels          ConversationLabel[]
+
+  @@index([studentId])
+  @@index([careerId, createdAt])
   @@map("conversaciones")
 }
 
+// [CAMBIA] Gana feedback (pulgar arriba/abajo sirve de señal de calidad).
 model Message {
-  id             String       @id @default(uuid()) @map("id_mensaje")
-  conversationId String       @map("id_conversacion")
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           RolMensaje   @map("rol") 
-  content        String       @map("contenido") @db.Text // Text para mensajes largos
-  createdAt      DateTime     @default(now()) @map("creado_en")
+  id             String            @id @default(uuid()) @map("id_mensaje")
+  conversationId String            @map("id_conversacion")
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           RolMensaje        @map("rol")
+  content        String            @map("contenido") @db.Text
+  createdAt      DateTime          @default(now()) @map("creado_en")
+  feedback       MessageFeedback?
+
+  @@index([conversationId, createdAt])
   @@map("mensajes")
 }
 
+enum FeedbackValue {
+  UP
+  DOWN
+}
 
+// [NUEVO]
+model MessageFeedback {
+  messageId String        @id @map("id_mensaje")
+  message   Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  value     FeedbackValue @map("valor")
+  comment   String?       @map("comentario") @db.Text
+  createdAt DateTime      @default(now()) @map("creado_en")
+
+  @@map("retroalimentacion_mensaje")
+}
+
+enum TopicGroup {
+  PERMANENCIA
+  ACADEMICO
+  TRAMITES
+  BIENESTAR
+  EMPLEABILIDAD
+  OTRO
+}
+
+// [NUEVO] Catálogo de temas del orientador (trámites, seriación, beca...). Es distinto de Category,
+// que clasifica materias, cursos y becas.
+model TopicCategory {
+  id     String              @id @default(uuid()) @map("id_tema")
+  code   String              @unique @map("clave")
+  label  String              @map("etiqueta")
+  topicGroup TopicGroup      @map("grupo_tema")
+  active Boolean             @default(true) @map("activo")
+  labels ConversationLabel[]
+
+  @@map("tema")
+}
+
+enum LabelSource {
+  MODEL
+  MANUAL // etiquetas a mano: son tu conjunto de examen para medir precisión
+}
+
+// [NUEVO] Una etiqueta de tema por conversación y fuente. Sin puntajes de sentimiento por alumno.
+model ConversationLabel {
+  id             String             @id @default(uuid()) @map("id_etiqueta")
+  conversationId String             @map("id_conversacion")
+  conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  topicId        String             @map("id_tema")
+  topic          TopicCategory      @relation(fields: [topicId], references: [id])
+  source         LabelSource        @map("fuente")
+  confidence     Decimal?           @map("confianza") @db.Decimal(3, 2)
+  modelVersion   String?            @map("version_modelo")
+  createdAt      DateTime           @default(now()) @map("creado_en")
+
+  @@unique([conversationId, source, topicId])
+  @@index([topicId])
+  @@map("etiqueta_conversacion")
+}
+
+// =====================================================================
+// 7. RECOMENDACIONES DE IA (rutas profesionales)
+// =====================================================================
+
+// [IGUAL]
 model AICategory {
   id      String     @id @default(uuid()) @map("id_categoria_ia")
   name    String     @map("nombre")
@@ -84,24 +745,248 @@ model AICategory {
   @@map("categoria_ia")
 }
 
+// [CAMBIA] Las 5 parejas opcion_X / descripcion_X pasan a filas de AIResultOption (composición).
+// Así el número de opciones deja de estar fijo en 5. Se guarda versión del modelo para saber qué generó qué.
 model AIResult {
-  id           String     @id @default(uuid()) @map("id_resultado_ia")
-  optionA      String     @map("opcion_a")
-  descriptionA String     @map("descripcion_a")
-  optionB      String     @map("opcion_b")
-  descriptionB String     @map("descripcion_b")
-  optionC      String     @map("opcion_c")
-  descriptionC String     @map("descripcion_c")
-  optionD      String     @map("opcion_d")
-  descriptionD String     @map("descripcion_d")
-  optionE      String     @map("opcion_e")
-  descriptionE String     @map("descripcion_e")
-  studentId    String     @map("id_alumno")
-  categoryId   String     @map("id_categoria_ia")
-  student      Student    @relation(fields: [studentId], references: [id])
-  category     AICategory @relation(fields: [categoryId], references: [id])
+  id           String           @id @default(uuid()) @map("id_resultado_ia")
+  studentId    String           @map("id_alumno")
+  student      Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  categoryId   String           @map("id_categoria_ia")
+  category     AICategory       @relation(fields: [categoryId], references: [id])
+  modelVersion String?          @map("version_modelo")
+  createdAt    DateTime         @default(now()) @map("creado_en")
+  options      AIResultOption[]
 
+  @@index([studentId])
   @@map("resultado_ia")
+}
+
+// [NUEVO] Título + descripción + posición (1 = mejor recomendación).
+model AIResultOption {
+  id          String   @id @default(uuid()) @map("id_opcion_ia")
+  resultId    String   @map("id_resultado_ia")
+  result      AIResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  position    Int      @map("posicion")
+  title       String   @map("titulo")
+  description String   @map("descripcion") @db.Text
+
+  @@unique([resultId, position])
+  @@map("opcion_resultado_ia")
+}
+
+// =====================================================================
+// 8. RESUMEN PSICOLÓGICO, CHECK-INS Y ENCUESTAS
+// =====================================================================
+
+enum SummaryStatus {
+  DRAFT // el alumno lo está revisando
+  APPROVED // el alumno lo aprobó, aún no lo comparte
+  SHARED // el alumno lo compartió con el destinatario
+  REVOKED // el alumno retiró el acceso
+}
+
+// [NUEVO] resumen_psicologico. Solo existe lo que el alumno revisó y editó; nunca se comparte
+// el chat ni un borrador sin aprobar. Compartir y revocar son decisiones del alumno, con fecha.
+// Es dato sensible: acceso solo del alumno y del destinatario; cada lectura va a AuditLog.
+// El destinatario es un User (psicólogo) con id plano, sin relación, igual que los demás actores.
+model PsychologicalSummary {
+  id          String        @id @default(uuid()) @map("id_resumen_psicologico")
+  studentId   String        @map("id_alumno")
+  student     Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  recipientId String?       @map("id_destinatario")
+  content     String        @map("contenido") @db.Text
+  status      SummaryStatus @default(DRAFT) @map("estado")
+  createdAt   DateTime      @default(now()) @map("creado_en")
+  approvedAt  DateTime?     @map("aprobado_en")
+  sharedAt    DateTime?     @map("compartido_en")
+  revokedAt   DateTime?     @map("revocado_en")
+
+  @@index([studentId])
+  @@index([recipientId, status])
+  @@map("resumen_psicologico")
+}
+
+// [NUEVO] Preferencias de aviso por usuario (correo de recordatorios, avisos de clase).
+model NotificationPreference {
+  userId         String  @id @map("id_usuario")
+  user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailEnabled   Boolean @default(true) @map("correo_activo")
+  classReminders Boolean @default(true) @map("recordatorio_clase")
+
+  @@map("preferencia_aviso")
+}
+
+// =====================================================================
+// CUESTIONARIOS (inicial, check-in y encuesta de periodo)
+// =====================================================================
+
+enum QuestionnaireKind {
+  ONBOARDING
+  CHECK_IN
+  TERM_SURVEY
+}
+
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTI_CHOICE
+  SCALE
+  TEXT
+}
+
+// [NUEVO] Reemplaza a QuestionnaireAnswer, CheckIn y TermSurvey (las preguntas ya viven en la base).
+// Al cambiar preguntas se crea una versión nueva; la anterior se desactiva y se conserva.
+model Questionnaire {
+  id        String            @id @default(uuid()) @map("id_cuestionario")
+  kind      QuestionnaireKind @map("tipo")
+  version   Int               @map("version")
+  active    Boolean           @default(true) @map("activo")
+  createdAt DateTime          @default(now()) @map("creado_en")
+  questions Question[]
+  responses Response[]
+
+  @@unique([kind, version])
+  @@map("cuestionario")
+}
+
+// `code` es estable entre versiones ("puma_satisfaction"): las métricas leen el code, no el id.
+model Question {
+  id              String             @id @default(uuid()) @map("id_pregunta")
+  questionnaireId String             @map("id_cuestionario")
+  questionnaire   Questionnaire      @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+  code            String             @map("clave")
+  position        Int                @map("posicion")
+  text            String             @map("texto") @db.Text
+  type            QuestionType       @map("tipo")
+  required        Boolean            @default(true) @map("obligatoria")
+  category        CategoriaPregunta? @map("categoria") // solo el cuestionario inicial
+  options         QuestionOption[]
+  answers         Answer[]
+
+  @@unique([questionnaireId, code])
+  @@map("pregunta")
+}
+
+// "Aún no sé" es una opción más.
+model QuestionOption {
+  id         String   @id @default(uuid()) @map("id_opcion_pregunta")
+  questionId String   @map("id_pregunta")
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  position   Int      @map("posicion")
+  value      String   @map("valor")
+  label      String   @map("etiqueta")
+  answers    Answer[]
+
+  @@unique([questionId, value])
+  @@map("opcion_pregunta")
+}
+
+// Una vez que un alumno contesta un cuestionario. periodId y subjectId solo se llenan si aplican.
+// Que el cuestionario inicial se conteste una sola vez lo valida el backend.
+model Response {
+  id              String         @id @default(uuid()) @map("id_envio")
+  studentId       String         @map("id_alumno")
+  student         Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  questionnaireId String         @map("id_cuestionario")
+  questionnaire   Questionnaire  @relation(fields: [questionnaireId], references: [id])
+  periodId        String?        @map("id_periodo")
+  period          AcademicPeriod? @relation(fields: [periodId], references: [id])
+  subjectId       String?        @map("id_materia")
+  subject         Subject?       @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  createdAt       DateTime       @default(now()) @map("creado_en")
+  answers         Answer[]
+
+  @@index([studentId, questionnaireId])
+  @@map("envio_cuestionario")
+}
+
+// Opción única o escala: una fila. Opción múltiple: una fila por opción elegida.
+// Las vistas agregadas solo leen optionId y numberValue, nunca textValue.
+model Answer {
+  id          String          @id @default(uuid()) @map("id_respuesta")
+  responseId  String          @map("id_envio")
+  response    Response        @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionId  String          @map("id_pregunta")
+  question    Question        @relation(fields: [questionId], references: [id])
+  optionId    String?         @map("id_opcion_pregunta")
+  option      QuestionOption? @relation(fields: [optionId], references: [id])
+  numberValue Int?            @map("valor_numerico")
+  textValue   String?         @map("valor_texto") @db.Text
+
+  @@index([responseId])
+  @@index([questionId])
+  @@map("respuesta")
+}
+
+// =====================================================================
+// 9. CONOCIMIENTO PARA EL RAG
+// =====================================================================
+
+enum DocumentStatus {
+  PENDING
+  INDEXED
+  FAILED
+  REPLACED
+}
+
+// [NUEVO] Registro de cada documento fuente (reglamento, plan de estudios, convocatoria...).
+// Los fragmentos viven en `documents` (pgvector); su metadata.documentId apunta a esta fila.
+model KnowledgeDocument {
+  id            String         @id @default(uuid()) @map("id_documento_conocimiento")
+  institutionId String         @map("id_institucion")
+  institution   Institution    @relation(fields: [institutionId], references: [id])
+  title         String         @map("titulo")
+  version       String         @map("version")
+  sourceUrl     String?        @map("url_fuente")
+  status        DocumentStatus @default(PENDING) @map("estado")
+  chunkCount    Int            @default(0) @map("fragmentos")
+  uploadedBy    String?        @map("subido_por")
+  createdAt     DateTime       @default(now()) @map("creado_en")
+
+  @@index([institutionId, status])
+  @@map("documento_conocimiento")
+}
+
+// [IGUAL] La tabla vectorial que ya usa n8n.
+model Document {
+  id        BigInt                @id @default(autoincrement())
+  content   String
+  metadata  Json
+  embedding Unsupported("vector")
+
+  @@map("documents")
+  @@ignore
+}
+
+// [IGUAL] La memoria del agente; la escribe n8n, no el backend.
+model n8n_chat_histories {
+  id         Int    @id @default(autoincrement())
+  session_id String @db.VarChar(255)
+  message    Json
+}
+
+// =====================================================================
+// 10. CATÁLOGOS Y LOGROS (casi igual que antes; solo cambia onDelete y fechas de beca)
+// =====================================================================
+
+model KnowledgeArea {
+  id            String            @id @default(uuid()) @map("id_area_conocimiento")
+  knowledgeArea KnowledgeAreaEnum @map("area_conocimiento")
+  careers       Career[]
+
+  @@map("area_conocimiento")
+}
+
+model Category {
+  id            String                   @id @default(uuid()) @map("id_categoria")
+  category      CategoryEnum             @map("categoria")
+  schoolarships Schoolarship[]
+  contests      Contest[]
+  courses       Course[]
+  experiences   ProfessionalExperience[]
+  subjects      Subject[]
+  professors    ProfessorCategory[]
+
+  @@map("categoria")
 }
 
 model AreaExpertise {
@@ -117,7 +1002,7 @@ model ProfessionalExperience {
   areaExpertiseId String        @map("id_area_expertise")
   studentId       String        @map("id_alumno")
   categoryId      String        @map("id_categoria")
-  student         Student       @relation(fields: [studentId], references: [id])
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   areaExpertise   AreaExpertise @relation(fields: [areaExpertiseId], references: [id])
   category        Category      @relation(fields: [categoryId], references: [id])
 
@@ -138,91 +1023,98 @@ model StudentContest {
   id        String  @id @default(uuid()) @map("id_concurso_alumno")
   contestId String  @map("id_concurso")
   studentId String  @map("id_alumno")
-  student   Student @relation(fields: [studentId], references: [id])
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   contest   Contest @relation(fields: [contestId], references: [id])
 
   @@map("concurso_alumno")
 }
 
-model KnowledgeArea {
-  id            String            @id @default(uuid()) @map("id_area_conocimiento")
-  knowledgeArea KnowledgeAreaEnum @map("area_conocimiento")
-  careers       Career[]
+model Course {
+  id             String          @id @default(uuid()) @map("id_curso")
+  name           String          @map("nombre")
+  categoryId     String          @map("id_categoria")
+  category       Category        @relation(fields: [categoryId], references: [id])
+  studentCourses StudentCourse[]
 
-  @@map("area_conocimiento")
+  @@map("curso")
 }
 
-model StudyPlan {
-  id        String   @id @default(uuid()) @map("id_plan_estudios")
-  studyPlan String   @map("plan_estudios")
-  semesters Int      @map("cantidad_semestres")
-  careers   Career[]
-
-  @@map("plan_estudios")
-}
-
-model Category {
-  id            String                   @id @default(uuid()) @map("id_categoria")
-  category      CategoryEnum             @map("categoria")
-  schoolarships Schoolarship[]
-  contests      Contest[]
-  courses       Course[]
-  experiences   ProfessionalExperience[]
-  subjects      Subject[]
-
-  @@map("categoria")
-}
-
-model Subject {
-  id         String   @id @default(uuid()) @map("id_materia")
-  subject    String   @map("materia")
-  categoryId String   @map("id_categoria")
-  grades     Grades[]
-  category   Category @relation(fields: [categoryId], references: [id])
-
-  code        Int?              @map("codigo")
-  semester    String?           @map("semestre")
-  credits     Int?              @map("creditos")
-  professors  ProfessorCourse[]
-
-  @@map("materia")
-}
-
-model Grades {
-  id        String  @id @default(uuid()) @map("id_calificacion")
-  grade     Int     @map("calificacion")
-  subjectId String  @map("id_materia")
+model StudentCourse {
+  id        String  @id @default(uuid()) @map("id_curso_alumno")
   studentId String  @map("id_alumno")
-  student   Student @relation(fields: [studentId], references: [id])
-  subject   Subject @relation(fields: [subjectId], references: [id])
+  courseId  String  @map("id_curso")
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course    Course  @relation(fields: [courseId], references: [id])
 
-  @@map("calificacion")
+  @@unique([studentId, courseId])
+  @@map("curso_alumno")
 }
 
-model Career {
-  id              String          @id @default(uuid()) @map("id_carrera")
-  name            String          @map("nombre")
-  studyPlanId     String          @map("id_plan_estudios")
-  knowledgeAreaId String          @map("id_area_conocimiento")
-  isMasters       Boolean         @map("es_maestria")
-  knowledgeArea   KnowledgeArea   @relation(fields: [knowledgeAreaId], references: [id])
-  studyPlan       StudyPlan       @relation(fields: [studyPlanId], references: [id])
-  students        StudentCareer[]
+model Schoolarship {
+  id                   String                @id @default(uuid()) @map("id_beca")
+  name                 String                @map("nombre")
+  categoryId           String                @map("id_categoria")
+  category             Category              @relation(fields: [categoryId], references: [id])
+  studentSchoolarships StudentSchoolarship[]
 
-  @@map("carrera")
+  @@map("beca")
 }
 
-model StudentCareer {
-  id          String  @id @default(uuid()) @map("id_carrera_alumno")
-  careerId    String  @map("id_carrera")
-  studentId   String  @map("id_alumno")
-  isGraduated Boolean @map("es_egresado")
-  student     Student @relation(fields: [studentId], references: [id])
-  career      Career  @relation(fields: [careerId], references: [id])
+// [CAMBIA] Gana startedAt / endsAt: sin ellos no se sabe si la beca sigue vigente.
+model StudentSchoolarship {
+  id             String       @id @default(uuid()) @map("id_beca_alumno")
+  studentId      String       @map("id_alumno")
+  schoolarshipId String       @map("id_beca")
+  startedAt      DateTime?    @map("inicia_en") @db.Date
+  endsAt         DateTime?    @map("termina_en") @db.Date
+  student        Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  schoolarship   Schoolarship @relation(fields: [schoolarshipId], references: [id])
 
-  @@map("carrera_alumno")
+  @@unique([studentId, schoolarshipId])
+  @@map("beca_alumno")
 }
 
+model Language {
+  id               String            @id @default(uuid()) @map("id_idioma")
+  name             String            @unique @map("nombre")
+  certifications   Certification[]
+  studentLanguages StudentLanguage[]
+
+  @@map("idioma")
+}
+
+model Skill {
+  id               String            @id @default(uuid()) @map("id_habilidad")
+  proficiency      String            @unique @map("nivel")
+  studentLanguages StudentLanguage[]
+
+  @@map("habilidad")
+}
+
+model Certification {
+  id         String   @id @default(uuid()) @map("id_certificado")
+  name       String   @map("nombre")
+  languageId String   @map("id_idioma")
+  language   Language @relation(fields: [languageId], references: [id])
+
+  @@map("certificado")
+}
+
+model StudentLanguage {
+  id         String   @id @default(uuid()) @map("id_idioma_alumno")
+  studentId  String   @map("id_alumno")
+  languageId String   @map("id_idioma")
+  skillId    String   @map("id_habilidad")
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  skill      Skill    @relation(fields: [skillId], references: [id])
+  language   Language @relation(fields: [languageId], references: [id])
+
+  @@unique([studentId, languageId])
+  @@map("idioma_alumno")
+}
+
+// [DECISIÓN PENDIENTE] Dirección. Para métricas de la universidad bastan bandas de tiempo de traslado
+// (sin domicilio). Se deja como estaba hasta que lo decidas.
 model Address {
   id          String    @id @default(uuid()) @map("id_direccion")
   street      String?   @map("calle")
@@ -262,136 +1154,12 @@ model Municipio {
   @@map("municipio")
 }
 
-model StudentLanguage {
-  id         String   @id @default(uuid()) @map("id_idioma_alumno")
-  studentId  String   @map("id_alumno")
-  languageId String   @map("id_idioma")
-  skillId    String   @map("id_habilidad")
-  student    Student  @relation(fields: [studentId], references: [id])
-  skill      Skill    @relation(fields: [skillId], references: [id])
-  language   Language @relation(fields: [languageId], references: [id])
+// =====================================================================
+// 11. VISTA Y ENUMS
+// =====================================================================
 
-  @@unique([studentId, languageId])
-  @@map("idioma_alumno")
-}
-
-model Skill {
-  id               String            @id @default(uuid()) @map("id_habilidad")
-  proficiency      String            @unique @map("nivel")
-  studentLanguages StudentLanguage[]
-
-  @@map("habilidad")
-}
-
-model Language {
-  id               String            @id @default(uuid()) @map("id_idioma")
-  name             String            @unique @map("nombre")
-  certifications   Certification[]
-  studentLanguages StudentLanguage[]
-
-  @@map("idioma")
-}
-
-model Certification {
-  id         String   @id @default(uuid()) @map("id_certificado")
-  name       String   @map("nombre")
-  languageId String   @map("id_idioma")
-  language   Language @relation(fields: [languageId], references: [id])
-
-  @@map("certificado")
-}
-
-model StudentCourse {
-  id        String  @id @default(uuid()) @map("id_curso_alumno")
-  studentId String  @map("id_alumno")
-  courseId  String  @map("id_curso")
-  student   Student @relation(fields: [studentId], references: [id])
-  course    Course  @relation(fields: [courseId], references: [id])
-
-  @@unique([studentId, courseId])
-  @@map("curso_alumno")
-}
-
-model Course {
-  id             String          @id @default(uuid()) @map("id_curso")
-  name           String          @map("nombre")
-  categoryId     String          @map("id_categoria")
-  category       Category        @relation(fields: [categoryId], references: [id])
-  studentCourses StudentCourse[]
-
-  @@map("curso")
-}
-
-model StudentSchoolarship {
-  id             String       @id @default(uuid()) @map("id_beca_alumno")
-  studentId      String       @map("id_alumno")
-  schoolarshipId String       @map("id_beca")
-  student        Student      @relation(fields: [studentId], references: [id])
-  schoolarship   Schoolarship @relation(fields: [schoolarshipId], references: [id])
-
-  @@unique([studentId, schoolarshipId])
-  @@map("beca_alumno")
-}
-
-model Schoolarship {
-  id                   String                @id @default(uuid()) @map("id_beca")
-  name                 String                @map("nombre")
-  categoryId           String                @map("id_categoria")
-  category             Category              @relation(fields: [categoryId], references: [id])
-  studentSchoolarships StudentSchoolarship[]
-
-  @@map("beca")
-}
-
-model Document {
-  id        BigInt                @id @default(autoincrement())
-  content   String
-  metadata  Json
-  embedding Unsupported("vector")
-
-  @@map("documents")
-  @@ignore
-}
-
-model Professor {
-  id          String           @id @default(uuid()) @map("id_profesor")
-  name        String           @map("nombre")
-  lastNameM   String           @map("apellido_m")
-  lastNameP   String           @map("apellido_p")
-  entryDate   DateTime?        @map("anio_ingreso") @db.Date
-  career      String?          @map("carrera")
-  aboutMe     String?          @map("acerca_de_mi") @db.Text
-  phone       String?          @map("telefono")
-  email       String?          @map("email")
-  active      Boolean          @default(true) @map("activo")
-  
-  // Relación con materias que imparte
-  courses     ProfessorCourse[]
-
-  @@map("profesores")
-}
-
-model ProfessorCourse {
-  id          String     @id @default(uuid()) @map("id_profesor_curso")
-  professorId String     @map("id_profesor")
-  subjectId   String     @map("id_materia")
-  notes       String?    @map("notas") @db.Text
-
-  // Relaciones
-  professor   Professor  @relation(fields: [professorId], references: [id], onDelete: Cascade)
-  subject     Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-
-  @@unique([professorId, subjectId])
-  @@map("profesor_curso")
-}
-
-
-model n8n_chat_histories {
-  id         Int    @id @default(autoincrement())
-  session_id String @db.VarChar(255)
-  message    Json
-}
-
+// [CAMBIA] Se reescribe el SQL: nombre y correo ahora salen de usuario; las calificaciones, de inscripcion.
+// Los campos son los mismos para que lo que ya la consume (agente / backend) no se rompa, salvo promedio (Decimal).
 view perfil_alumno {
   id_alumno         String?
   numero_cuenta     Int?
@@ -401,7 +1169,7 @@ view perfil_alumno {
   correo            String?
   interes           String?
   semestre_actual   Int?
-  promedio          Int?
+  promedio          Decimal?
   carrera           String?
   es_egresado       Boolean?
   materia           String?
