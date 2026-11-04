@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  UnauthorizedException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { AutenticacionService } from './autenticacion.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
@@ -53,7 +57,8 @@ describe('Pruebas de Seguridad y Validación — Fase 1 PumaIA', () => {
 
     mockConfigService = {
       get: jest.fn((key: string) => {
-        if (key === 'GOOGLE_CLIENT_ID') return 'pumaia-google-client-id.apps.googleusercontent.com';
+        if (key === 'GOOGLE_CLIENT_ID')
+          return 'pumaia-google-client-id.apps.googleusercontent.com';
         if (key === 'JWT_SECRET') return 'test-access-secret';
         if (key === 'JWT_REFRESH_SECRET') return 'test-refresh-secret';
         if (key === 'NODE_ENV') return 'development';
@@ -106,9 +111,9 @@ describe('Pruebas de Seguridad y Validación — Fase 1 PumaIA', () => {
       }),
     } as any);
 
-    await expect(authService.loginWithGoogle({ idToken: 'token-con-aud-ajena' })).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      authService.loginWithGoogle({ idToken: 'token-con-aud-ajena' }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   // CASO 2: GOOGLE_CLIENT_ID ausente en variables de entorno
@@ -130,9 +135,9 @@ describe('Pruebas de Seguridad y Validación — Fase 1 PumaIA', () => {
       }),
     } as any);
 
-    await expect(authService.loginWithGoogle({ idToken: 'token-cualquiera' })).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      authService.loginWithGoogle({ idToken: 'token-cualquiera' }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   // CASO 3: Token de Google expirado
@@ -149,9 +154,9 @@ describe('Pruebas de Seguridad y Validación — Fase 1 PumaIA', () => {
       }),
     } as any);
 
-    await expect(authService.loginWithGoogle({ idToken: 'token-expirado' })).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      authService.loginWithGoogle({ idToken: 'token-expirado' }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   // CASO 4: Correo no verificado en Google
@@ -168,9 +173,9 @@ describe('Pruebas de Seguridad y Validación — Fase 1 PumaIA', () => {
       }),
     } as any);
 
-    await expect(authService.loginWithGoogle({ idToken: 'token-unverified' })).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      authService.loginWithGoogle({ idToken: 'token-unverified' }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   // CASO 5: Correo de dominio diferente (no alumno) sin registro previo
@@ -189,9 +194,9 @@ describe('Pruebas de Seguridad y Validación — Fase 1 PumaIA', () => {
 
     mockPrisma.user.findUnique.mockResolvedValue(null); // No existe en BD
 
-    await expect(authService.loginWithGoogle({ idToken: 'token-profesor-no-invitado' })).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      authService.loginWithGoogle({ idToken: 'token-profesor-no-invitado' }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   // CASO 6: Refresh token utilizado como access token
@@ -204,7 +209,9 @@ describe('Pruebas de Seguridad y Validación — Fase 1 PumaIA', () => {
       email: '318291029@pcpuma.acatlan.unam.mx',
     };
 
-    await expect(jwtStrategy.validate(refreshPayload as any)).rejects.toThrow(UnauthorizedException);
+    await expect(jwtStrategy.validate(refreshPayload as any)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   // CASO 7: Access token utilizado como refresh token
@@ -215,7 +222,9 @@ describe('Pruebas de Seguridad y Validación — Fase 1 PumaIA', () => {
       issuedAtMs: Date.now(),
     });
 
-    await expect(authService.refreshAccessToken('fake-access-token')).rejects.toThrow(UnauthorizedException);
+    await expect(
+      authService.refreshAccessToken('fake-access-token'),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   // CASO 8: Refresh token emitido antes del logout
@@ -237,23 +246,36 @@ describe('Pruebas de Seguridad y Validación — Fase 1 PumaIA', () => {
       student: { id: 'student-uuid', accountNumber: 318291029 },
     });
 
-    await expect(authService.refreshAccessToken('refresh-token-anterior-a-logout')).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      authService.refreshAccessToken('refresh-token-anterior-a-logout'),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   // CASO 9: Consentimientos en lote: falla atómica en $transaction
   it('9. Consentimientos en lote debe fallar atómicamente si un elemento es inválido', async () => {
     mockPrisma.privacyNotice.findUnique
-      .mockResolvedValueOnce({ id: 'notice-1', kind: ConsentKind.TERMS_AND_NOTICE })
+      .mockResolvedValueOnce({
+        id: 'notice-1',
+        kind: ConsentKind.TERMS_AND_NOTICE,
+      })
       .mockResolvedValueOnce(null); // Segundo aviso no existe
 
     const consentsPayload = [
-      { kind: ConsentKind.TERMS_AND_NOTICE, noticeId: 'notice-1', granted: true },
-      { kind: ConsentKind.ANALYTICS, noticeId: 'notice-inexistente', granted: true },
+      {
+        kind: ConsentKind.TERMS_AND_NOTICE,
+        noticeId: 'notice-1',
+        granted: true,
+      },
+      {
+        kind: ConsentKind.ANALYTICS,
+        noticeId: 'notice-inexistente',
+        granted: true,
+      },
     ];
 
-    await expect(consentsService.recordBatchConsents('user-1', consentsPayload)).rejects.toThrow();
+    await expect(
+      consentsService.recordBatchConsents('user-1', consentsPayload),
+    ).rejects.toThrow();
   });
 
   // CASO 10: Protección contra colisión/suplantación de googleSub sobre cuenta existente
@@ -279,20 +301,41 @@ describe('Pruebas de Seguridad y Validación — Fase 1 PumaIA', () => {
       student: { id: 'student-1', accountNumber: 318291029 },
     });
 
-    await expect(authService.loginWithGoogle({ idToken: 'token-colision-sub' })).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      authService.loginWithGoogle({ idToken: 'token-colision-sub' }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   // CASO 11: Validación estricta del dominio institucional @pcpuma.acatlan.unam.mx
   it('11. isValidStudentInstitutionalEmail debe aceptar solo @pcpuma.acatlan.unam.mx exacto', () => {
-    expect(authService.isValidStudentInstitutionalEmail('318291029@pcpuma.acatlan.unam.mx')).toBe(true);
-    expect(authService.isValidStudentInstitutionalEmail('  318291029@PCPUMA.ACATLAN.UNAM.MX  ')).toBe(true);
-    expect(authService.isValidStudentInstitutionalEmail('318291029@gmail.com')).toBe(false);
-    expect(authService.isValidStudentInstitutionalEmail('318291029@acatlan.unam.mx')).toBe(false);
-    expect(authService.isValidStudentInstitutionalEmail('318291029@sub.pcpuma.acatlan.unam.mx')).toBe(false);
-    expect(authService.isValidStudentInstitutionalEmail('a@b@pcpuma.acatlan.unam.mx')).toBe(false);
-    expect(authService.isValidStudentInstitutionalEmail('@pcpuma.acatlan.unam.mx')).toBe(false);
+    expect(
+      authService.isValidStudentInstitutionalEmail(
+        '318291029@pcpuma.acatlan.unam.mx',
+      ),
+    ).toBe(true);
+    expect(
+      authService.isValidStudentInstitutionalEmail(
+        '  318291029@PCPUMA.ACATLAN.UNAM.MX  ',
+      ),
+    ).toBe(true);
+    expect(
+      authService.isValidStudentInstitutionalEmail('318291029@gmail.com'),
+    ).toBe(false);
+    expect(
+      authService.isValidStudentInstitutionalEmail('318291029@acatlan.unam.mx'),
+    ).toBe(false);
+    expect(
+      authService.isValidStudentInstitutionalEmail(
+        '318291029@sub.pcpuma.acatlan.unam.mx',
+      ),
+    ).toBe(false);
+    expect(
+      authService.isValidStudentInstitutionalEmail(
+        'a@b@pcpuma.acatlan.unam.mx',
+      ),
+    ).toBe(false);
+    expect(
+      authService.isValidStudentInstitutionalEmail('@pcpuma.acatlan.unam.mx'),
+    ).toBe(false);
   });
 });
-

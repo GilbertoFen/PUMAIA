@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   ConflictException,
+  NotFoundException,
   InternalServerErrorException,
   ServiceUnavailableException,
   Logger,
@@ -30,6 +31,7 @@ import {
   InviteStaffDto,
 } from './dto/auth.dto';
 import { JwtPayload } from './interfaces/auth-user.interface';
+import { parseUnamAccountName } from './normalizar-nombre';
 
 export interface TokenResponse {
   accessToken: string;
@@ -45,6 +47,7 @@ export interface TokenResponse {
     professorId?: string | null;
     accountNumber: number | null;
     hasCompletedQuiz?: boolean;
+    needsNameConfirmation?: boolean;
   };
 }
 
@@ -60,7 +63,8 @@ interface SessionMirror {
 }
 
 // Hash bcrypt precalculado para defensa contra enumeración por tiempo (timing attack)
-const DUMMY_BCRYPT_HASH = '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4oL8E9.K2G';
+const DUMMY_BCRYPT_HASH =
+  '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4oL8E9.K2G';
 const BCRYPT_ROUNDS = 12;
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutos
@@ -96,10 +100,32 @@ export class AutenticacionService {
     return crypto.createHash('sha256').update(value).digest('hex');
   }
 
-  private safeCompareHex(a: string | null | undefined, b: string | null | undefined): boolean {
+  private assertPasswordAuthEnabled(): void {
+    if (this.configService.get<string>('ENABLE_PASSWORD_AUTH') !== 'true') {
+      throw new ForbiddenException(
+        'El acceso con contraseña está deshabilitado. Usa el inicio de sesión con Google.',
+      );
+    }
+  }
+
+  private needsNameConfirmation(user: any): boolean {
+    return (
+      !!user?.student &&
+      user.name === 'Alumno' &&
+      user.lastNameP === String(user.student.accountNumber)
+    );
+  }
+
+  private safeCompareHex(
+    a: string | null | undefined,
+    b: string | null | undefined,
+  ): boolean {
     if (!a || !b || a.length !== b.length) return false;
     try {
-      return crypto.timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+      return crypto.timingSafeEqual(
+        Buffer.from(a, 'utf8'),
+        Buffer.from(b, 'utf8'),
+      );
     } catch {
       return false;
     }
@@ -152,10 +178,14 @@ export class AutenticacionService {
    */
   public validatePasswordStrength(password: string): void {
     if (!password || typeof password !== 'string' || password.length < 8) {
-      throw new BadRequestException('La contraseña debe tener al menos 8 caracteres.');
+      throw new BadRequestException(
+        'La contraseña debe tener al menos 8 caracteres.',
+      );
     }
     if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) {
-      throw new BadRequestException('La contraseña debe incluir al menos una letra y un número.');
+      throw new BadRequestException(
+        'La contraseña debe incluir al menos una letra y un número.',
+      );
     }
   }
 
@@ -164,6 +194,7 @@ export class AutenticacionService {
   // =========================================================================
 
   async registerWithPassword(dto: RegisterDto) {
+    this.assertPasswordAuthEnabled();
     const email = (dto.email || '').trim().toLowerCase();
 
     if (!this.isValidStudentInstitutionalEmail(email)) {
@@ -210,8 +241,13 @@ export class AutenticacionService {
     // Anti-enumeración: si la cuenta ya existe y ya está verificada con contraseña activa,
     // registramos en bitácora y devolvemos exactamente la misma estructura de respuesta.
     if (
-      (existingUser && existingUser.emailVerifiedAt && (existingUser as any).passwordHash) ||
-      (existingStudent && existingUser && existingStudent.userId !== existingUser.id)
+      (existingUser &&
+        (existingUser.emailVerifiedAt ||
+          (existingUser as any).googleSub ||
+          (existingUser as any).passwordHash)) ||
+      (existingStudent &&
+        existingUser &&
+        existingStudent.userId !== existingUser.id)
     ) {
       await this.auditService.log({
         actorType: 'SYSTEM',
@@ -297,7 +333,11 @@ export class AutenticacionService {
       detail: { email, accountNumber: extractedAccountNumber },
     });
 
-    const verificationUrl = this.buildFrontendAuthLink('verify', email, rawVerificationToken);
+    const verificationUrl = this.buildFrontendAuthLink(
+      'verify',
+      email,
+      rawVerificationToken,
+    );
     await this.dispatchInstitutionalEmail(
       email,
       'Verifica tu cuenta institucional en PUMAIA',
@@ -322,11 +362,14 @@ export class AutenticacionService {
   // =========================================================================
 
   async verifyEmail(dto: VerifyEmailDto) {
+    this.assertPasswordAuthEnabled();
     const email = (dto.email || '').trim().toLowerCase();
     const token = (dto.token || '').trim();
 
     if (!email || !token) {
-      throw new BadRequestException('El correo y el token de verificación son obligatorios.');
+      throw new BadRequestException(
+        'El correo y el token de verificación son obligatorios.',
+      );
     }
 
     const user: any = await this.prisma.user.findUnique({
@@ -348,14 +391,17 @@ export class AutenticacionService {
         action: 'EMAIL_VERIFICATION_FAILED',
         detail: { email },
       });
-      throw new BadRequestException('El código de verificación es inválido o ha expirado.');
+      throw new BadRequestException(
+        'El código de verificación es inválido o ha expirado.',
+      );
     }
 
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
         emailVerifiedAt: new Date(),
-        status: user.status === UserStatus.INVITED ? UserStatus.ACTIVE : user.status,
+        status:
+          user.status === UserStatus.INVITED ? UserStatus.ACTIVE : user.status,
         verificationTokenHash: null,
         verificationExpiresAt: null,
         failedLoginAttempts: 0,
@@ -372,11 +418,13 @@ export class AutenticacionService {
 
     return {
       verified: true,
-      message: 'Correo institucional verificado con éxito. Ya puedes iniciar sesión.',
+      message:
+        'Correo institucional verificado con éxito. Ya puedes iniciar sesión.',
     };
   }
 
   async resendVerification(dto: ResendVerificationDto) {
+    this.assertPasswordAuthEnabled();
     const email = (dto.email || '').trim().toLowerCase();
     const user: any = await this.prisma.user.findUnique({ where: { email } });
 
@@ -401,7 +449,11 @@ export class AutenticacionService {
       } as any,
     });
 
-    const verificationUrl = this.buildFrontendAuthLink('verify', email, rawVerificationToken);
+    const verificationUrl = this.buildFrontendAuthLink(
+      'verify',
+      email,
+      rawVerificationToken,
+    );
     await this.dispatchInstitutionalEmail(
       email,
       'Nuevo código de verificación PUMAIA',
@@ -425,13 +477,16 @@ export class AutenticacionService {
     dto: LoginDto,
     meta?: { userAgent?: string; ipAddress?: string },
   ): Promise<TokenResponse> {
+    this.assertPasswordAuthEnabled();
     let email = (dto.email || '').trim().toLowerCase();
     if (!email && dto.accountNumber) {
       email = `${dto.accountNumber}${this.studentDomain}`;
     }
 
     if (!email || !dto.password) {
-      throw new BadRequestException('Debes proporcionar tu correo institucional y contraseña.');
+      throw new BadRequestException(
+        'Debes proporcionar tu correo institucional y contraseña.',
+      );
     }
 
     const user: any = await this.prisma.user.findUnique({
@@ -444,14 +499,20 @@ export class AutenticacionService {
     });
 
     // Defensa contra enumeración de cuentas y ataques de tiempo
-    if (!user || user.status === UserStatus.DELETED || Boolean(user.deletedAt)) {
+    if (
+      !user ||
+      user.status === UserStatus.DELETED ||
+      Boolean(user.deletedAt)
+    ) {
       await bcrypt.compare(dto.password, DUMMY_BCRYPT_HASH);
       await this.auditService.log({
         actorType: 'SYSTEM',
         action: 'LOGIN_FAILED_UNKNOWN_OR_DELETED',
         detail: { email },
       });
-      throw new UnauthorizedException('Credenciales inválidas o cuenta no autorizada.');
+      throw new UnauthorizedException(
+        'Credenciales inválidas o cuenta no autorizada.',
+      );
     }
 
     // Verificar bloqueo temporal por fuerza bruta
@@ -469,14 +530,21 @@ export class AutenticacionService {
 
     if (!user.passwordHash) {
       await bcrypt.compare(dto.password, DUMMY_BCRYPT_HASH);
-      throw new UnauthorizedException('Credenciales inválidas o cuenta no autorizada.');
+      throw new UnauthorizedException(
+        'Credenciales inválidas o cuenta no autorizada.',
+      );
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      user.passwordHash,
+    );
     if (!isPasswordValid) {
       const failedAttempts = (user.failedLoginAttempts || 0) + 1;
       const shouldLock = failedAttempts >= MAX_FAILED_ATTEMPTS;
-      const lockedUntil = shouldLock ? new Date(Date.now() + LOCKOUT_DURATION_MS) : null;
+      const lockedUntil = shouldLock
+        ? new Date(Date.now() + LOCKOUT_DURATION_MS)
+        : null;
 
       await this.prisma.user.update({
         where: { id: user.id },
@@ -489,11 +557,15 @@ export class AutenticacionService {
       await this.auditService.log({
         actorType: 'SYSTEM',
         actorId: user.id,
-        action: shouldLock ? 'ACCOUNT_LOCKED_BRUTE_FORCE' : 'LOGIN_FAILED_BAD_PASSWORD',
+        action: shouldLock
+          ? 'ACCOUNT_LOCKED_BRUTE_FORCE'
+          : 'LOGIN_FAILED_BAD_PASSWORD',
         detail: { email, failedAttempts },
       });
 
-      throw new UnauthorizedException('Credenciales inválidas o cuenta no autorizada.');
+      throw new UnauthorizedException(
+        'Credenciales inválidas o cuenta no autorizada.',
+      );
     }
 
     // Verificación obligatoria del correo antes de permitir acceso
@@ -510,12 +582,18 @@ export class AutenticacionService {
     }
 
     const roles: RoleType[] = (user.roles || []).map((r: any) => r.role);
-    const staffRoles: RoleType[] = [RoleType.PROFESSOR, RoleType.INSTITUTION_ADMIN, RoleType.ANALYST];
+    const staffRoles: RoleType[] = [
+      RoleType.PROFESSOR,
+      RoleType.INSTITUTION_ADMIN,
+      RoleType.ANALYST,
+    ];
     const isStaff = roles.some((r) => staffRoles.includes(r));
 
     // Si es exclusivamente estudiante, exigir dominio y número de cuenta válido
     if (!isStaff && !this.isValidStudentInstitutionalEmail(user.email)) {
-      throw new UnauthorizedException('El correo de estudiante no cumple el formato institucional requerido.');
+      throw new UnauthorizedException(
+        'El correo de estudiante no cumple el formato institucional requerido.',
+      );
     }
 
     // Login exitoso: restablecer contador de intentos fallidos y registrar último acceso
@@ -525,7 +603,8 @@ export class AutenticacionService {
         failedLoginAttempts: 0,
         lockedUntil: null,
         lastLoginAt: new Date(),
-        status: user.status === UserStatus.INVITED ? UserStatus.ACTIVE : user.status,
+        status:
+          user.status === UserStatus.INVITED ? UserStatus.ACTIVE : user.status,
       } as any,
     });
 
@@ -561,6 +640,7 @@ export class AutenticacionService {
         professorId: user.professor?.id || null,
         accountNumber: user.student?.accountNumber ?? null,
         hasCompletedQuiz: user.student?.hasCompletedQuiz ?? false,
+        needsNameConfirmation: this.needsNameConfirmation(user),
       },
     };
   }
@@ -570,6 +650,7 @@ export class AutenticacionService {
   // =========================================================================
 
   async forgotPassword(dto: ForgotPasswordDto) {
+    this.assertPasswordAuthEnabled();
     const email = (dto.email || '').trim().toLowerCase();
     const genericResponse = {
       message:
@@ -579,7 +660,11 @@ export class AutenticacionService {
     if (!email) return genericResponse;
 
     const user: any = await this.prisma.user.findUnique({ where: { email } });
-    if (!user || user.status === UserStatus.DELETED || Boolean(user.deletedAt)) {
+    if (
+      !user ||
+      user.status === UserStatus.DELETED ||
+      Boolean(user.deletedAt)
+    ) {
       return genericResponse;
     }
 
@@ -619,6 +704,7 @@ export class AutenticacionService {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
+    this.assertPasswordAuthEnabled();
     const email = (dto.email || '').trim().toLowerCase();
     const token = (dto.token || '').trim();
 
@@ -640,7 +726,9 @@ export class AutenticacionService {
         action: 'PASSWORD_RESET_FAILED_INVALID_TOKEN',
         detail: { email },
       });
-      throw new BadRequestException('El token de recuperación es inválido o ha expirado.');
+      throw new BadRequestException(
+        'El token de recuperación es inválido o ha expirado.',
+      );
     }
 
     const passwordHash = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
@@ -654,7 +742,8 @@ export class AutenticacionService {
         failedLoginAttempts: 0,
         lockedUntil: null,
         emailVerifiedAt: user.emailVerifiedAt || new Date(),
-        status: user.status === UserStatus.INVITED ? UserStatus.ACTIVE : user.status,
+        status:
+          user.status === UserStatus.INVITED ? UserStatus.ACTIVE : user.status,
       } as any,
     });
 
@@ -670,7 +759,8 @@ export class AutenticacionService {
 
     return {
       reset: true,
-      message: 'Contraseña actualizada correctamente. Todas las sesiones previas han sido cerradas.',
+      message:
+        'Contraseña actualizada correctamente. Todas las sesiones previas han sido cerradas.',
     };
   }
 
@@ -679,105 +769,146 @@ export class AutenticacionService {
    */
   async inviteStaffMember(dto: InviteStaffDto, grantedByUserId: string) {
     if (dto.role === RoleType.STUDENT) {
-      throw new BadRequestException('Las invitaciones administrativas están reservadas para personal académico o administrativo.');
+      throw new BadRequestException(
+        'Las invitaciones administrativas están reservadas para personal académico o administrativo.',
+      );
     }
 
     const email = dto.email.trim().toLowerCase();
     const institution = await this.getOrCreateDefaultInstitution();
     const rawResetToken = crypto.randomBytes(32).toString('hex');
     const resetPasswordTokenHash = this.sha256(rawResetToken);
-    const resetPasswordExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 días para activar invitación
+    const resetPasswordExpiresAt = new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000,
+    ); // 7 días para activar invitación
 
-    const existing = await this.prisma.user.findUnique({
-      where: { email },
-      include: { roles: true },
-    });
-
-    let user: any;
-    if (existing) {
-      const hasRole = existing.roles.some((r) => r.role === dto.role);
-      if (!hasRole) {
-        await this.prisma.userRole.create({
-          data: {
-            userId: existing.id,
-            role: dto.role,
-            grantedBy: grantedByUserId,
-          },
-        });
-      }
-      user = await this.prisma.user.update({
-        where: { id: existing.id },
-        data: {
-          resetPasswordTokenHash,
-          resetPasswordExpiresAt,
-        } as any,
-        include: { roles: true },
-      });
-    } else {
-      user = await this.prisma.user.create({
-        data: {
-          institutionId: institution.id,
-          email,
-          name: dto.name.trim(),
-          lastNameP: dto.lastNameP.trim(),
-          lastNameM: dto.lastNameM?.trim() || null,
-          status: UserStatus.INVITED,
-          resetPasswordTokenHash,
-          resetPasswordExpiresAt,
-          roles: {
-            create: {
-              role: dto.role,
-              grantedBy: grantedByUserId,
-            },
-          },
-          ...(dto.role === RoleType.PROFESSOR
-            ? {
-                professor: {
-                  create: {
-                    name: dto.name.trim(),
-                    lastNameP: dto.lastNameP.trim(),
-                    lastNameM: dto.lastNameM?.trim() || null,
-                    active: true,
-                  },
-                },
-              }
-            : {}),
-        } as any,
+    const userId: string = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.user.findUnique({
+        where: { email },
         include: { roles: true, professor: true },
       });
-    }
 
-    if (
-      dto.role === RoleType.PROFESSOR &&
-      !user.professor &&
-      (this.prisma as any).professor?.findUnique
-    ) {
-      try {
-        const existingProf = await (this.prisma as any).professor.findUnique({
-          where: { userId: user.id },
-        });
-        if (!existingProf && (this.prisma as any).professor?.create) {
-          await (this.prisma as any).professor.create({
-            data: {
-              userId: user.id,
-              name: dto.name.trim(),
-              lastNameP: dto.lastNameP.trim(),
-              lastNameM: dto.lastNameM?.trim() || null,
-              active: true,
+      // --- Profesor: NUNCA se crea una fila nueva sin decisión explícita ---
+      let professorToLink: { id: string } | null = null;
+      let createProfessor = false;
+      if (dto.role === RoleType.PROFESSOR && !existing?.professor) {
+        if (dto.professorId) {
+          const prof = await tx.professor.findUnique({
+            where: { id: dto.professorId },
+          });
+          if (!prof) {
+            throw new NotFoundException('El profesor indicado no existe.');
+          }
+          if (prof.userId) {
+            throw new ConflictException(
+              'Ese profesor ya está ligado a otra cuenta de usuario.',
+            );
+          }
+          professorToLink = prof;
+        } else if (dto.createNewProfessor === true) {
+          createProfessor = true;
+        } else {
+          const candidates = await tx.professor.findMany({
+            where: {
+              userId: null,
+              lastNameP: {
+                contains: dto.lastNameP.trim(),
+                mode: 'insensitive',
+              },
             },
+            select: { id: true, name: true, lastNameP: true, lastNameM: true },
+            take: 10,
+          });
+          throw new BadRequestException({
+            message:
+              'Para invitar a un profesor indica "professorId" (el profesor ya cargado en el sistema) o "createNewProfessor": true si es un profesor nuevo.',
+            candidates,
           });
         }
-      } catch {
-        // Ignorar en mocks unitarios simples
       }
-    }
+
+      // --- Usuario y rol ---
+      let uid: string;
+      if (existing) {
+        uid = existing.id;
+        if (!existing.roles.some((r) => r.role === dto.role)) {
+          await tx.userRole.create({
+            data: { userId: uid, role: dto.role, grantedBy: grantedByUserId },
+          });
+        }
+        await tx.user.update({
+          where: { id: uid },
+          data: { resetPasswordTokenHash, resetPasswordExpiresAt } as any,
+        });
+      } else {
+        const created = await tx.user.create({
+          data: {
+            institutionId: institution.id,
+            email,
+            name: dto.name.trim(),
+            lastNameP: dto.lastNameP.trim(),
+            lastNameM: dto.lastNameM?.trim() || null,
+            status: UserStatus.INVITED,
+            resetPasswordTokenHash,
+            resetPasswordExpiresAt,
+            roles: {
+              create: { role: dto.role, grantedBy: grantedByUserId },
+            },
+          } as any,
+        });
+        uid = created.id;
+      }
+
+      // --- Ligar (o crear, solo si se pidió) la fila de profesor ---
+      if (professorToLink) {
+        await tx.professor.update({
+          where: { id: professorToLink.id },
+          data: { userId: uid },
+        });
+      } else if (createProfessor) {
+        await tx.professor.create({
+          data: {
+            userId: uid,
+            name: dto.name.trim(),
+            lastNameP: dto.lastNameP.trim(),
+            lastNameM: dto.lastNameM?.trim() || null,
+            active: true,
+          },
+        });
+      }
+
+      return uid;
+    });
+
+    const user: any = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { roles: true, professor: true },
+    });
 
     await this.auditService.log({
       actorType: 'ADMIN',
       actorId: grantedByUserId,
       action: 'STAFF_INVITED',
-      detail: { email, role: dto.role, invitedUserId: user.id },
+      detail: {
+        email,
+        role: dto.role,
+        invitedUserId: user.id,
+        professorId: user.professor?.id ?? null,
+      },
     });
+
+    if (this.configService.get<string>('ENABLE_PASSWORD_AUTH') !== 'true') {
+      return {
+        message:
+          'Invitación registrada. La persona podrá entrar con su cuenta de Google al iniciar sesión.',
+        user: {
+          id: user.id,
+          email: user.email,
+          status: user.status,
+          roles: user.roles.map((r: any) => r.role),
+        },
+      };
+    }
 
     const inviteUrl = this.buildFrontendAuthLink('reset', email, rawResetToken);
     await this.dispatchInstitutionalEmail(
@@ -819,12 +950,17 @@ export class AutenticacionService {
     dto: DevLoginDto,
     meta?: { userAgent?: string; ipAddress?: string },
   ): Promise<TokenResponse> {
-    const isProduction = this.configService.get<string>('NODE_ENV') === 'production';
-    const isDevLoginEnabled = this.configService.get<string>('ENABLE_DEV_LOGIN') === 'true';
+    const isProduction =
+      this.configService.get<string>('NODE_ENV') === 'production';
+    const isDevLoginEnabled =
+      this.configService.get<string>('ENABLE_DEV_LOGIN') === 'true';
 
-    if (isProduction || !isDevLoginEnabled) {
+    const isLocalTestDb =
+      this.configService.get<string>('PUMAIA_DB_TARGET') === 'local_test';
+
+    if (isProduction || !isDevLoginEnabled || !isLocalTestDb) {
       throw new ForbiddenException(
-        'El endpoint dev-login está estrictamente deshabilitado. Requiere ENABLE_DEV_LOGIN=true en entorno de desarrollo.',
+        'El endpoint dev-login está estrictamente deshabilitado. Requiere ENABLE_DEV_LOGIN=true y PUMAIA_DB_TARGET=local_test.',
       );
     }
 
@@ -859,8 +995,7 @@ export class AutenticacionService {
         });
         if (verified?.sub) return verified.sub;
       } catch {
-        const decoded: any = this.jwtService.decode?.(refreshToken);
-        if (decoded?.sub) return decoded.sub;
+        // firma inválida o expirada: no se confía en el contenido
       }
     }
 
@@ -871,10 +1006,10 @@ export class AutenticacionService {
           const verified = this.jwtService.verify(accessToken, {
             secret: this.getAccessSecret(),
           });
-          if (verified?.sub || verified?.userId) return verified.sub || verified.userId;
+          if (verified?.sub || verified?.userId)
+            return verified.sub || verified.userId;
         } catch {
-          const decoded: any = this.jwtService.decode?.(accessToken);
-          if (decoded?.sub || decoded?.userId) return decoded.sub || decoded.userId;
+          // firma inválida o expirada: no se confía en el contenido
         }
       }
     }
@@ -893,8 +1028,7 @@ export class AutenticacionService {
         });
         if (verified?.sid) return verified.sid;
       } catch {
-        const decoded: any = this.jwtService.decode?.(refreshToken);
-        if (decoded?.sid) return decoded.sid;
+        // firma inválida o expirada: no se confía en el contenido
       }
     }
 
@@ -907,8 +1041,7 @@ export class AutenticacionService {
           });
           if (verified?.sid) return verified.sid;
         } catch {
-          const decoded: any = this.jwtService.decode?.(accessToken);
-          if (decoded?.sid) return decoded.sid;
+          // firma inválida o expirada: no se confía en el contenido
         }
       }
     }
@@ -939,7 +1072,11 @@ export class AutenticacionService {
           where: { email },
           include: { roles: true },
         });
-        const staffRoles: RoleType[] = [RoleType.PROFESSOR, RoleType.INSTITUTION_ADMIN, RoleType.ANALYST];
+        const staffRoles: RoleType[] = [
+          RoleType.PROFESSOR,
+          RoleType.INSTITUTION_ADMIN,
+          RoleType.ANALYST,
+        ];
         if (
           invitedStaff &&
           invitedStaff.roles?.some((r) => staffRoles.includes(r.role))
@@ -954,11 +1091,19 @@ export class AutenticacionService {
   }
 
   private async handleStudentLogin(
-    profile: { sub: string; email: string; name: string; given_name?: string; family_name?: string; picture?: string },
+    profile: {
+      sub: string;
+      email: string;
+      name: string;
+      given_name?: string;
+      family_name?: string;
+      picture?: string;
+    },
     email: string,
     preferredCareerId?: string,
     meta?: { userAgent?: string; ipAddress?: string },
   ): Promise<TokenResponse> {
+    const isMock = profile.sub.startsWith('mock-google-sub-');
     const [localPart] = email.split('@');
     const accountRegex = /^\d{1,9}$/;
 
@@ -974,6 +1119,7 @@ export class AutenticacionService {
     }
 
     const accountNumber = parseInt(localPart, 10);
+    const parsedName = parseUnamAccountName(profile.name);
 
     let user: any = await this.prisma.user.findFirst({
       where: {
@@ -999,17 +1145,24 @@ export class AutenticacionService {
       }
 
       const institution = await this.getOrCreateDefaultInstitution();
-      const careerId = await this.resolveCareerId(institution.id, preferredCareerId);
+      const careerId = await this.resolveCareerId(
+        institution.id,
+        preferredCareerId,
+      );
 
       user = await this.prisma.$transaction(async (tx) => {
         const newUser = await tx.user.create({
           data: {
             institutionId: institution.id,
             email,
-            googleSub: profile.sub,
+            googleSub: isMock ? null : profile.sub,
             emailVerifiedAt: new Date(),
-            name: profile.given_name || profile.name,
-            lastNameP: profile.family_name || 'UNAM',
+            // Formato de cuenta: "2024 Mat CASAS LORENZO SAUL" (gen, carrera, ap. P, ap. M, nombre).
+            // Si no se interpreta con confianza queda provisional y el alumno lo confirma
+            // (PATCH /students/profile-name); la tira de materias también lo sobrescribe.
+            name: parsedName?.name ?? 'Alumno',
+            lastNameP: parsedName?.lastNameP ?? String(accountNumber),
+            lastNameM: parsedName?.lastNameM ?? null,
             avatarUrl: profile.picture || null,
             status: UserStatus.ACTIVE,
             lastLoginAt: new Date(),
@@ -1046,10 +1199,12 @@ export class AutenticacionService {
       });
     } else {
       if (user.status === UserStatus.DELETED || Boolean(user.deletedAt)) {
-        throw new UnauthorizedException('Esta cuenta ha sido dada de baja. Contacta a administración.');
+        throw new UnauthorizedException(
+          'Esta cuenta ha sido dada de baja. Contacta a administración.',
+        );
       }
 
-      if (user.googleSub && user.googleSub !== profile.sub) {
+      if (!isMock && user.googleSub && user.googleSub !== profile.sub) {
         await this.auditService.log({
           actorType: 'SYSTEM',
           actorId: user.id,
@@ -1077,19 +1232,37 @@ export class AutenticacionService {
         where: { id: user.id },
         data: {
           lastLoginAt: new Date(),
-          googleSub: user.googleSub || profile.sub,
+          googleSub: isMock ? user.googleSub : user.googleSub || profile.sub,
+          ...(user.emailVerifiedAt || isMock
+            ? {}
+            : {
+                // pre-hijacking: credenciales sembradas antes de probar el correo vía Google
+                passwordHash: null,
+                verificationTokenHash: null,
+                verificationExpiresAt: null,
+                resetPasswordTokenHash: null,
+                resetPasswordExpiresAt: null,
+              }),
           emailVerifiedAt: user.emailVerifiedAt || new Date(),
-          status: user.status === UserStatus.INVITED ? UserStatus.ACTIVE : user.status,
+          status:
+            user.status === UserStatus.INVITED
+              ? UserStatus.ACTIVE
+              : user.status,
           avatarUrl: profile.picture || user.avatarUrl,
         },
       });
 
       if (!user.student) {
         if (this.prisma.student?.findUnique) {
-          const existingStudentByAccount = await this.prisma.student.findUnique({
-            where: { accountNumber },
-          });
-          if (existingStudentByAccount && existingStudentByAccount.userId !== user.id) {
+          const existingStudentByAccount = await this.prisma.student.findUnique(
+            {
+              where: { accountNumber },
+            },
+          );
+          if (
+            existingStudentByAccount &&
+            existingStudentByAccount.userId !== user.id
+          ) {
             throw new ConflictException(
               `El número de cuenta ${accountNumber} ya se encuentra vinculado a otro usuario.`,
             );
@@ -1097,7 +1270,10 @@ export class AutenticacionService {
         }
 
         const institution = await this.getOrCreateDefaultInstitution();
-        const careerId = await this.resolveCareerId(institution.id, preferredCareerId);
+        const careerId = await this.resolveCareerId(
+          institution.id,
+          preferredCareerId,
+        );
 
         const createdStudent = await this.prisma.student.create({
           data: {
@@ -1113,7 +1289,9 @@ export class AutenticacionService {
     }
 
     if (!user) {
-      throw new UnauthorizedException('No se pudo autenticar o inicializar la cuenta del usuario.');
+      throw new UnauthorizedException(
+        'No se pudo autenticar o inicializar la cuenta del usuario.',
+      );
     }
 
     const roles: RoleType[] = (user.roles || []).map((r: any) => r.role);
@@ -1149,12 +1327,20 @@ export class AutenticacionService {
         professorId: user.professor?.id || null,
         accountNumber: user.student?.accountNumber || accountNumber,
         hasCompletedQuiz: user.student?.hasCompletedQuiz ?? false,
+        needsNameConfirmation: this.needsNameConfirmation(user),
       },
     };
   }
 
   private async handleStaffLogin(
-    profile: { sub: string; email: string; name: string; given_name?: string; family_name?: string; picture?: string },
+    profile: {
+      sub: string;
+      email: string;
+      name: string;
+      given_name?: string;
+      family_name?: string;
+      picture?: string;
+    },
     email: string,
     meta?: { userAgent?: string; ipAddress?: string },
   ): Promise<TokenResponse> {
@@ -1166,6 +1352,8 @@ export class AutenticacionService {
         professor: true,
       },
     });
+
+    const isMock = profile.sub.startsWith('mock-google-sub-');
 
     if (!user) {
       await this.auditService.log({
@@ -1179,10 +1367,12 @@ export class AutenticacionService {
     }
 
     if (user.status === UserStatus.DELETED || Boolean(user.deletedAt)) {
-      throw new UnauthorizedException('Esta cuenta institucional se encuentra inactiva o dada de baja.');
+      throw new UnauthorizedException(
+        'Esta cuenta institucional se encuentra inactiva o dada de baja.',
+      );
     }
 
-    if (user.googleSub && user.googleSub !== profile.sub) {
+    if (!isMock && user.googleSub && user.googleSub !== profile.sub) {
       await this.auditService.log({
         actorType: 'SYSTEM',
         actorId: user.id,
@@ -1198,9 +1388,20 @@ export class AutenticacionService {
       where: { id: user.id },
       data: {
         lastLoginAt: new Date(),
-        googleSub: user.googleSub || profile.sub,
+        googleSub: isMock ? user.googleSub : user.googleSub || profile.sub,
+        ...(user.emailVerifiedAt || isMock
+          ? {}
+          : {
+              // pre-hijacking: credenciales sembradas antes de probar el correo vía Google
+              passwordHash: null,
+              verificationTokenHash: null,
+              verificationExpiresAt: null,
+              resetPasswordTokenHash: null,
+              resetPasswordExpiresAt: null,
+            }),
         emailVerifiedAt: user.emailVerifiedAt || new Date(),
-        status: user.status === UserStatus.INVITED ? UserStatus.ACTIVE : user.status,
+        status:
+          user.status === UserStatus.INVITED ? UserStatus.ACTIVE : user.status,
         avatarUrl: profile.picture || user.avatarUrl,
       },
     });
@@ -1220,7 +1421,9 @@ export class AutenticacionService {
     );
 
     await this.auditService.log({
-      actorType: roles.includes(RoleType.INSTITUTION_ADMIN) ? 'ADMIN' : 'PROFESSOR',
+      actorType: roles.includes(RoleType.INSTITUTION_ADMIN)
+        ? 'ADMIN'
+        : 'PROFESSOR',
       actorId: user.id,
       action: 'LOGIN_SUCCESS',
       detail: { email: user.email, roles, sessionId: tokens.sessionId },
@@ -1245,15 +1448,21 @@ export class AutenticacionService {
   // 6. SESIONES MULTI-DISPOSITIVO, ROTACIÓN Y DETECCIÓN DE REÚSO DE REFRESH TOKEN
   // =========================================================================
 
-  async refreshAccessToken(
-    refreshToken: string,
-  ): Promise<{ accessToken: string; refreshToken: string; sessionId?: string }> {
+  async refreshAccessToken(refreshToken: string): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    sessionId?: string;
+  }> {
     try {
       const refreshSecret = this.getRefreshSecret();
-      const payload = this.jwtService.verify(refreshToken, { secret: refreshSecret });
+      const payload = this.jwtService.verify(refreshToken, {
+        secret: refreshSecret,
+      });
 
       if (payload.tokenType !== 'refresh') {
-        throw new UnauthorizedException('El token proporcionado no es un token válido de renovación.');
+        throw new UnauthorizedException(
+          'El token proporcionado no es un token válido de renovación.',
+        );
       }
 
       const user: any = await this.prisma.user.findUnique({
@@ -1261,7 +1470,11 @@ export class AutenticacionService {
         include: { roles: true, student: true, professor: true },
       });
 
-      if (!user || user.status !== UserStatus.ACTIVE || Boolean(user.deletedAt)) {
+      if (
+        !user ||
+        user.status !== UserStatus.ACTIVE ||
+        Boolean(user.deletedAt)
+      ) {
         throw new UnauthorizedException('Usuario no válido o cuenta inactiva.');
       }
 
@@ -1274,7 +1487,10 @@ export class AutenticacionService {
 
       if (payload.sid) {
         if (this.inFlightRotations.has(payload.sid)) {
-          await this.revokeSessionRecord(payload.sid, 'CONCURRENT_REFRESH_TOKEN_REUSE');
+          await this.revokeSessionRecord(
+            payload.sid,
+            'CONCURRENT_REFRESH_TOKEN_REUSE',
+          );
           await this.auditService.log({
             actorType: 'SYSTEM',
             actorId: user.id,
@@ -1295,7 +1511,9 @@ export class AutenticacionService {
           const session = await this.findSessionById(payload.sid);
 
           if (!session) {
-            throw new UnauthorizedException('La sesión asociada al token no existe o ha expirado.');
+            throw new UnauthorizedException(
+              'La sesión asociada al token no existe o ha expirado.',
+            );
           }
 
           if (Boolean(session.revokedAt)) {
@@ -1305,16 +1523,23 @@ export class AutenticacionService {
               action: 'REVOKED_REFRESH_TOKEN_ATTEMPT',
               detail: { email: user.email, sessionId: session.id },
             });
-            throw new UnauthorizedException('Esta sesión ha sido revocada o cerrada. Inicia sesión nuevamente.');
+            throw new UnauthorizedException(
+              'Esta sesión ha sido revocada o cerrada. Inicia sesión nuevamente.',
+            );
           }
 
           if (new Date(session.expiresAt) <= new Date()) {
-            throw new UnauthorizedException('La sesión ha expirado. Inicia sesión nuevamente.');
+            throw new UnauthorizedException(
+              'La sesión ha expirado. Inicia sesión nuevamente.',
+            );
           }
 
           // Detección estricta de reúso de refresh token ya rotado
           if (session.refreshTokenHash !== incomingTokenHash) {
-            await this.revokeSessionRecord(session.id, 'REFRESH_TOKEN_REUSE_DETECTED');
+            await this.revokeSessionRecord(
+              session.id,
+              'REFRESH_TOKEN_REUSE_DETECTED',
+            );
             await this.auditService.log({
               actorType: 'SYSTEM',
               actorId: user.id,
@@ -1323,7 +1548,8 @@ export class AutenticacionService {
                 email: user.email,
                 sessionId: session.id,
                 familyId: session.familyId,
-                matchedPrevious: session.previousTokenHash === incomingTokenHash,
+                matchedPrevious:
+                  session.previousTokenHash === incomingTokenHash,
               },
             });
             throw new UnauthorizedException(
@@ -1354,7 +1580,10 @@ export class AutenticacionService {
           );
 
           if (!rotatedAtomically) {
-            await this.revokeSessionRecord(session.id, 'REFRESH_TOKEN_REUSE_DETECTED');
+            await this.revokeSessionRecord(
+              session.id,
+              'REFRESH_TOKEN_REUSE_DETECTED',
+            );
             await this.auditService.log({
               actorType: 'SYSTEM',
               actorId: user.id,
@@ -1396,7 +1625,9 @@ export class AutenticacionService {
             action: 'REVOKED_REFRESH_TOKEN_ATTEMPT',
             detail: { email: user.email },
           });
-          throw new UnauthorizedException('Esta sesión ha sido revocada o cerrada. Inicia sesión nuevamente.');
+          throw new UnauthorizedException(
+            'Esta sesión ha sido revocada o cerrada. Inicia sesión nuevamente.',
+          );
         }
       }
 
@@ -1420,7 +1651,9 @@ export class AutenticacionService {
       return newTokens;
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
-      throw new UnauthorizedException('Refresh token expirado, revocado o inválido.');
+      throw new UnauthorizedException(
+        'Refresh token expirado, revocado o inválido.',
+      );
     }
   }
 
@@ -1445,12 +1678,19 @@ export class AutenticacionService {
       },
     });
 
-    if (!user || user.status === UserStatus.DELETED || Boolean(user.deletedAt)) {
-      throw new UnauthorizedException('Usuario no encontrado o cuenta inactiva.');
+    if (
+      !user ||
+      user.status === UserStatus.DELETED ||
+      Boolean(user.deletedAt)
+    ) {
+      throw new UnauthorizedException(
+        'Usuario no encontrado o cuenta inactiva.',
+      );
     }
 
     const accountNumber = user.student?.accountNumber ?? null;
-    const accountNumberFormatted = accountNumber !== null ? String(accountNumber).padStart(9, '0') : null;
+    const accountNumberFormatted =
+      accountNumber !== null ? String(accountNumber).padStart(9, '0') : null;
 
     return {
       id: user.id,
@@ -1461,6 +1701,7 @@ export class AutenticacionService {
       avatarUrl: user.avatarUrl,
       status: user.status,
       emailVerifiedAt: user.emailVerifiedAt,
+      needsNameConfirmation: this.needsNameConfirmation(user),
       roles: user.roles.map((r: any) => r.role),
       personalProfile: user.personalProfile,
       student: user.student
@@ -1630,7 +1871,9 @@ export class AutenticacionService {
     return { accessToken, refreshToken };
   }
 
-  private async findSessionById(sessionId: string): Promise<SessionMirror | null> {
+  private async findSessionById(
+    sessionId: string,
+  ): Promise<SessionMirror | null> {
     if ((this.prisma as any).authSession?.findUnique) {
       try {
         const dbSession = await (this.prisma as any).authSession.findUnique({
@@ -1654,7 +1897,10 @@ export class AutenticacionService {
   ): Promise<boolean> {
     const mirror = this.sessionMirror.get(sessionId);
     if (mirror) {
-      if (mirror.refreshTokenHash !== previousTokenHash || Boolean(mirror.revokedAt)) {
+      if (
+        mirror.refreshTokenHash !== previousTokenHash ||
+        Boolean(mirror.revokedAt)
+      ) {
         return false;
       }
       mirror.previousTokenHash = previousTokenHash;
@@ -1702,7 +1948,10 @@ export class AutenticacionService {
     return true;
   }
 
-  private async revokeSessionRecord(sessionId: string, reason: string): Promise<void> {
+  private async revokeSessionRecord(
+    sessionId: string,
+    reason: string,
+  ): Promise<void> {
     const mirror = this.sessionMirror.get(sessionId);
     if (mirror) {
       mirror.revokedAt = new Date();
@@ -1724,7 +1973,10 @@ export class AutenticacionService {
     }
   }
 
-  private async revokeAllUserSessions(userId: string, reason: string): Promise<void> {
+  private async revokeAllUserSessions(
+    userId: string,
+    reason: string,
+  ): Promise<void> {
     for (const sess of this.sessionMirror.values()) {
       if (sess.userId === userId && sess.revokedAt === null) {
         sess.revokedAt = new Date();
@@ -1754,7 +2006,9 @@ export class AutenticacionService {
       );
 
       if (!response.ok) {
-        throw new UnauthorizedException('El token de Google no pudo ser verificado con el proveedor.');
+        throw new UnauthorizedException(
+          'El token de Google no pudo ser verificado con el proveedor.',
+        );
       }
 
       const payload = await response.json();
@@ -1765,14 +2019,21 @@ export class AutenticacionService {
         );
       }
 
-      const validIssuers = ['accounts.google.com', 'https://accounts.google.com'];
+      const validIssuers = [
+        'accounts.google.com',
+        'https://accounts.google.com',
+      ];
       if (!payload.iss || !validIssuers.includes(payload.iss)) {
-        throw new UnauthorizedException('El emisor (iss) del token de Google no es válido.');
+        throw new UnauthorizedException(
+          'El emisor (iss) del token de Google no es válido.',
+        );
       }
 
       const configuredAud = this.configService.get<string>('GOOGLE_CLIENT_ID');
       if (!configuredAud) {
-        this.logger.error('GOOGLE_CLIENT_ID no está configurado en las variables de entorno.');
+        this.logger.error(
+          'GOOGLE_CLIENT_ID no está configurado en las variables de entorno.',
+        );
         throw new UnauthorizedException(
           'La autenticación con Google no está disponible: falta configurar GOOGLE_CLIENT_ID en el servidor.',
         );
@@ -1793,8 +2054,13 @@ export class AutenticacionService {
         );
       }
 
-      if (payload.email_verified !== 'true' && payload.email_verified !== true) {
-        throw new UnauthorizedException('El correo de Google no se encuentra verificado.');
+      if (
+        payload.email_verified !== 'true' &&
+        payload.email_verified !== true
+      ) {
+        throw new UnauthorizedException(
+          'El correo de Google no se encuentra verificado.',
+        );
       }
 
       if (!payload.sub || !payload.email) {
@@ -1806,7 +2072,9 @@ export class AutenticacionService {
       return {
         sub: String(payload.sub),
         email: String(payload.email).trim().toLowerCase(),
-        name: payload.name || `${payload.given_name || ''} ${payload.family_name || ''}`.trim(),
+        name:
+          payload.name ||
+          `${payload.given_name || ''} ${payload.family_name || ''}`.trim(),
         given_name: payload.given_name,
         family_name: payload.family_name,
         picture: payload.picture,
@@ -1824,18 +2092,24 @@ export class AutenticacionService {
   private getAccessSecret(): string {
     const configured = this.configService.get<string>('JWT_SECRET');
     if (configured) return configured;
-    if (this.configService.get<string>('NODE_ENV') === 'production') {
-      throw new InternalServerErrorException('JWT_SECRET no está configurado en producción.');
+    const env = this.configService.get<string>('NODE_ENV');
+    if (env !== 'development' && env !== 'test') {
+      throw new InternalServerErrorException('JWT_SECRET no está configurado.');
     }
-    return 'pumaia-default-secret-change-in-env';
+    return 'pumaia-dev-only-secret';
   }
 
   private getRefreshSecret(): string {
     const configured = this.configService.get<string>('JWT_REFRESH_SECRET');
     if (configured) return configured;
 
-    const mainSecret = this.getAccessSecret();
-    return `${mainSecret}_puma_refresh_isolated_secret_v1`;
+    const env = this.configService.get<string>('NODE_ENV');
+    if (env !== 'development' && env !== 'test') {
+      throw new InternalServerErrorException(
+        'JWT_REFRESH_SECRET no está configurado.',
+      );
+    }
+    return `${this.getAccessSecret()}_dev_refresh`;
   }
 
   private async getOrCreateDefaultInstitution() {
@@ -1859,7 +2133,10 @@ export class AutenticacionService {
     return institution;
   }
 
-  private async resolveCareerId(institutionId: string, preferredCareerId?: string): Promise<string> {
+  private async resolveCareerId(
+    institutionId: string,
+    preferredCareerId?: string,
+  ): Promise<string> {
     if (preferredCareerId) {
       const career = await this.prisma.career.findUnique({
         where: { id: preferredCareerId },
@@ -1927,7 +2204,8 @@ export class AutenticacionService {
   ): Promise<void> {
     const isProd = this.configService.get<string>('NODE_ENV') === 'production';
     const requireDelivery =
-      isProd || this.configService.get<string>('EMAIL_REQUIRE_DELIVERY') === 'true';
+      isProd ||
+      this.configService.get<string>('EMAIL_REQUIRE_DELIVERY') === 'true';
     const normalizedTo = to.trim().toLowerCase();
     const fromAddress =
       this.configService.get<string>('EMAIL_FROM') ||
@@ -1946,7 +2224,9 @@ export class AutenticacionService {
       };
       this.testEmailOutbox.set(normalizedTo, entry);
 
-      const outboxPath = this.configService.get<string>('EMAIL_TEST_OUTBOX_PATH');
+      const outboxPath = this.configService.get<string>(
+        'EMAIL_TEST_OUTBOX_PATH',
+      );
       if (outboxPath) {
         try {
           const resolvedPath = path.isAbsolute(outboxPath)
@@ -1981,7 +2261,9 @@ export class AutenticacionService {
     }
 
     const smtpHost = this.configService.get<string>('SMTP_HOST');
-    const smtpPort = Number(this.configService.get<string>('SMTP_PORT') || 1025);
+    const smtpPort = Number(
+      this.configService.get<string>('SMTP_PORT') || 1025,
+    );
     const webhookUrl = this.configService.get<string>('EMAIL_WEBHOOK_URL');
 
     let delivered = false;
@@ -2049,7 +2331,8 @@ export class AutenticacionService {
         return;
       } catch (err: any) {
         lastSafeErrorCode =
-          typeof err?.message === 'string' && err.message.startsWith('WEBHOOK_HTTP_')
+          typeof err?.message === 'string' &&
+          err.message.startsWith('WEBHOOK_HTTP_')
             ? err.message
             : err?.code || 'WEBHOOK_DELIVERY_ERROR';
         this.logger.warn(
@@ -2110,7 +2393,11 @@ export class AutenticacionService {
 
           if (code >= 400) {
             socket.destroy();
-            return reject(Object.assign(new Error('SMTP_REJECTED'), { code: `SMTP_${code}` }));
+            return reject(
+              Object.assign(new Error('SMTP_REJECTED'), {
+                code: `SMTP_${code}`,
+              }),
+            );
           }
 
           if (step === 0 && code === 220) {
@@ -2151,12 +2438,18 @@ export class AutenticacionService {
 
       socket.on('timeout', () => {
         socket.destroy();
-        reject(Object.assign(new Error('SMTP_TIMEOUT'), { code: 'SMTP_TIMEOUT' }));
+        reject(
+          Object.assign(new Error('SMTP_TIMEOUT'), { code: 'SMTP_TIMEOUT' }),
+        );
       });
 
       socket.on('error', (err: any) => {
         socket.destroy();
-        reject(Object.assign(new Error('SMTP_SOCKET_ERROR'), { code: err?.code || 'SMTP_SOCKET_ERROR' }));
+        reject(
+          Object.assign(new Error('SMTP_SOCKET_ERROR'), {
+            code: err?.code || 'SMTP_SOCKET_ERROR',
+          }),
+        );
       });
     });
   }

@@ -28,6 +28,40 @@ import * as crypto from 'crypto';
 export class SectionsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Límite de intentos fallidos de código (en memoria: válido con una sola instancia del backend)
+  private readonly joinAttempts = new Map<
+    string,
+    { count: number; resetAt: number }
+  >();
+  private static readonly MAX_JOIN_FAILS = 5;
+  private static readonly JOIN_WINDOW_MS = 10 * 60 * 1000;
+
+  private assertJoinAttemptsAllowed(studentId: string) {
+    const e = this.joinAttempts.get(studentId);
+    if (
+      e &&
+      e.resetAt > Date.now() &&
+      e.count >= SectionsService.MAX_JOIN_FAILS
+    ) {
+      throw new BadRequestException(
+        'Demasiados intentos con códigos inválidos. Intenta de nuevo en unos minutos.',
+      );
+    }
+  }
+
+  private registerFailedJoin(studentId: string) {
+    const now = Date.now();
+    const e = this.joinAttempts.get(studentId);
+    if (!e || e.resetAt <= now) {
+      this.joinAttempts.set(studentId, {
+        count: 1,
+        resetAt: now + SectionsService.JOIN_WINDOW_MS,
+      });
+    } else {
+      e.count += 1;
+    }
+  }
+
   /**
    * Resuelve el professorId asociado al usuario autenticado.
    */
@@ -51,7 +85,9 @@ export class SectionsService {
     section: { id: string; professorId?: string | null },
     user?: AuthUser,
   ): Promise<void> {
-    if (!user) return;
+    if (!user) {
+      throw new ForbiddenException('Se requiere un usuario autenticado.');
+    }
     if (user.roles?.includes(RoleType.INSTITUTION_ADMIN)) {
       return;
     }
@@ -74,11 +110,13 @@ export class SectionsService {
     section: { professorId?: string | null },
     user?: AuthUser,
   ): Promise<boolean> {
-    if (!user) return true;
+    if (!user) return false;
     if (user.roles?.includes(RoleType.INSTITUTION_ADMIN)) return true;
     if (user.roles?.includes(RoleType.PROFESSOR)) {
       const profId = await this.resolveProfessorId(user);
-      return Boolean(profId && section.professorId && section.professorId === profId);
+      return Boolean(
+        profId && section.professorId && section.professorId === profId,
+      );
     }
     return false;
   }
@@ -173,7 +211,6 @@ export class SectionsService {
         meetings: {
           orderBy: { weekday: 'asc' },
         },
-        roster: true,
         _count: {
           select: {
             roster: true,
@@ -291,9 +328,20 @@ export class SectionsService {
     const section = await this.findOneRaw(sectionId);
     await this.assertSectionOwnership(section, user);
 
+    const hhmm = (t: string) => {
+      const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(t.trim());
+      return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null;
+    };
+    const a = hhmm(dto.startTime);
+    const b = hhmm(dto.endTime);
+    if (!a || !b) {
+      throw new BadRequestException(
+        'Las horas deben tener formato HH:mm o HH:mm:ss.',
+      );
+    }
     const today = new Date().toISOString().split('T')[0];
-    const start = new Date(`${today}T${dto.startTime}:00.000Z`);
-    const end = new Date(`${today}T${dto.endTime}:00.000Z`);
+    const start = new Date(`${today}T${a}:00.000Z`);
+    const end = new Date(`${today}T${b}:00.000Z`);
 
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || start >= end) {
       throw new BadRequestException(
@@ -353,6 +401,7 @@ export class SectionsService {
       : dto.status || RosterStatus.LISTED;
 
     return this.prisma.$transaction(async (tx) => {
+      let enrollmentConflict = false;
       const rosterItem = await tx.sectionRoster.create({
         data: {
           sectionId,
@@ -379,10 +428,15 @@ export class SectionsService {
         });
 
         if (existingEnrollment) {
-          await tx.enrollment.update({
-            where: { id: existingEnrollment.id },
-            data: { sectionId: section.id },
-          });
+          // La lista es indicativa (sirve para pasar lista): no mueve a nadie de su grupo.
+          if (!existingEnrollment.sectionId) {
+            await tx.enrollment.update({
+              where: { id: existingEnrollment.id },
+              data: { sectionId: section.id },
+            });
+          } else if (existingEnrollment.sectionId !== section.id) {
+            enrollmentConflict = true; // sigue en su grupo; solo se avisa
+          }
         } else {
           await tx.enrollment.create({
             data: {
@@ -403,7 +457,7 @@ export class SectionsService {
         );
       }
 
-      return rosterItem;
+      return { ...rosterItem, enrollmentConflict };
     });
   }
 
@@ -411,11 +465,7 @@ export class SectionsService {
    * Carga masiva de lista oficial de alumnos (`RosterUpload` + `SectionRoster`).
    * Verifica titularidad del profesor o rol de administrador.
    */
-  async uploadRoster(
-    sectionId: string,
-    dto: UploadRosterDto,
-    user: AuthUser,
-  ) {
+  async uploadRoster(sectionId: string, dto: UploadRosterDto, user: AuthUser) {
     const section = await this.findOneRaw(sectionId);
     await this.assertSectionOwnership(section, user);
 
@@ -503,6 +553,18 @@ export class SectionsService {
       linkedStudentId = matched?.id ?? null;
     }
 
+    if (linkedStudentId) {
+      const st = await this.prisma.student.findUnique({
+        where: { id: linkedStudentId },
+        select: { accountNumber: true },
+      });
+      if (!st || st.accountNumber !== rosterEntry.accountNumber) {
+        throw new BadRequestException(
+          'El alumno indicado no corresponde al número de cuenta de esta fila.',
+        );
+      }
+    }
+
     const updated = await this.prisma.sectionRoster.update({
       where: { id: rosterId },
       data: {
@@ -545,6 +607,43 @@ export class SectionsService {
 
     const enrollmentsCreated: any[] = [];
     for (const item of items) {
+      const [subject, period] = await Promise.all([
+        this.prisma.subject.findUnique({
+          where: { id: item.subjectId },
+          select: { id: true },
+        }),
+        this.prisma.academicPeriod.findUnique({
+          where: { id: item.periodId },
+          select: { id: true },
+        }),
+      ]);
+      if (!subject || !period) {
+        throw new BadRequestException(
+          'Materia o periodo inválido en el horario importado.',
+        );
+      }
+
+      // El grupo solo se liga si es coherente con la materia/periodo y el alumno ya está en su lista.
+      // En cualquier otro caso se usa el código de ingreso.
+      let sectionId: string | null = null;
+      if (item.sectionId) {
+        const sec = await this.prisma.courseSection.findUnique({
+          where: { id: item.sectionId },
+          select: { id: true, subjectId: true, periodId: true },
+        });
+        if (
+          sec &&
+          sec.subjectId === item.subjectId &&
+          sec.periodId === item.periodId
+        ) {
+          const inRoster = await this.prisma.sectionRoster.findFirst({
+            where: { sectionId: sec.id, linkedStudentId: studentId },
+            select: { id: true },
+          });
+          if (inRoster) sectionId = sec.id;
+        }
+      }
+
       const existing = await this.prisma.enrollment.findFirst({
         where: {
           studentId,
@@ -554,26 +653,34 @@ export class SectionsService {
       });
 
       if (existing) {
-        const updated = await this.prisma.enrollment.update({
-          where: { id: existing.id },
-          data: {
-            ...(item.sectionId ? { sectionId: item.sectionId } : {}),
-            source: EnrollmentSource.TRANSCRIPT,
-          },
-        });
-        enrollmentsCreated.push(updated);
+        // No se toca origen ni estado; solo se completa el grupo si estaba vacío
+        if (
+          sectionId &&
+          !existing.sectionId &&
+          existing.status === EnrollmentStatus.IN_PROGRESS
+        ) {
+          enrollmentsCreated.push(
+            await this.prisma.enrollment.update({
+              where: { id: existing.id },
+              data: { sectionId },
+            }),
+          );
+        } else {
+          enrollmentsCreated.push(existing);
+        }
       } else {
-        const created = await this.prisma.enrollment.create({
-          data: {
-            studentId,
-            subjectId: item.subjectId,
-            periodId: item.periodId,
-            sectionId: item.sectionId || null,
-            status: EnrollmentStatus.IN_PROGRESS,
-            source: EnrollmentSource.TRANSCRIPT,
-          },
-        });
-        enrollmentsCreated.push(created);
+        enrollmentsCreated.push(
+          await this.prisma.enrollment.create({
+            data: {
+              studentId,
+              subjectId: item.subjectId,
+              periodId: item.periodId,
+              sectionId,
+              status: EnrollmentStatus.IN_PROGRESS,
+              source: EnrollmentSource.TRANSCRIPT,
+            },
+          }),
+        );
       }
     }
 
@@ -589,6 +696,7 @@ export class SectionsService {
    * Permite a un estudiante unirse a un grupo usando el joinCode.
    */
   async joinWithCode(studentId: string, joinCode: string) {
+    this.assertJoinAttemptsAllowed(studentId);
     const cleanCode = joinCode.trim().toUpperCase();
 
     const section = await this.prisma.courseSection.findUnique({
@@ -601,11 +709,8 @@ export class SectionsService {
     });
 
     if (!section) {
+      this.registerFailedJoin(studentId);
       throw new NotFoundException('Código de grupo inválido o no encontrado.');
-    }
-
-    if (section.capacity && section.roster.length >= section.capacity) {
-      throw new BadRequestException('El grupo ha alcanzado su cupo máximo.');
     }
 
     const student = await this.prisma.student.findUnique({
@@ -617,7 +722,23 @@ export class SectionsService {
       throw new NotFoundException('Estudiante no encontrado.');
     }
 
-    const fullName = `${student.user.name} ${student.user.lastNameP} ${student.user.lastNameM || ''}`.trim();
+    // Un alumno que ya está en la lista (o llega tarde) nunca es bloqueado por el cupo
+    const alreadyMember = section.roster.some(
+      (r) =>
+        r.linkedStudentId === student.id ||
+        r.accountNumber === student.accountNumber,
+    );
+    if (
+      section.capacity &&
+      !alreadyMember &&
+      section.roster.length >= section.capacity
+    ) {
+      throw new BadRequestException('El grupo ha alcanzado su cupo máximo.');
+    }
+    this.joinAttempts.delete(studentId);
+
+    const fullName =
+      `${student.user.name} ${student.user.lastNameP} ${student.user.lastNameM || ''}`.trim();
 
     return this.prisma.$transaction(async (tx) => {
       const existingInRoster = await tx.sectionRoster.findUnique({

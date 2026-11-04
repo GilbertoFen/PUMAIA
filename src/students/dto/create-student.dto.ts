@@ -1,10 +1,21 @@
-import { IsString, IsInt, IsNotEmpty, Min, Max, IsOptional, IsNumber, IsEmail } from 'class-validator';
+import {
+  IsString,
+  IsInt,
+  IsNotEmpty,
+  Min,
+  Max,
+  IsOptional,
+  IsNumber,
+  IsEmail,
+} from 'class-validator';
 
 export class CreateStudentDto {
   @IsInt()
   @IsNotEmpty({ message: 'El número de cuenta es obligatorio' })
   @Min(10000, { message: 'El número de cuenta debe tener al menos 5 dígitos' })
-  @Max(999999999, { message: 'El número de cuenta no puede superar los 9 dígitos' })
+  @Max(999999999, {
+    message: 'El número de cuenta no puede superar los 9 dígitos',
+  })
   accountNumber: number;
 
   @IsString()

@@ -364,12 +364,12 @@ enum StudySystem {
   A_DISTANCIA
 }
 
-// [CAMBIA] Gana totalCredits (para calcular porcentaje de avance) y la relación con Subject.
 model StudyPlan {
   id           String    @id @default(uuid()) @map("id_plan_estudios")
   studyPlan    String    @map("plan_estudios")
   semesters    Int       @map("cantidad_semestres")
   totalCredits Int?      @map("creditos_totales")
+  mandatoryCredits Int?  @map("creditos_obligatorios")
   optionalCredits Int?   @map("creditos_optativos")
   firstGeneration Int?   @map("primera_generacion")
   level        StudyLevel  @map("nivel")

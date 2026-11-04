@@ -8,6 +8,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './jwt.strategy';
 import { AuditModule } from '../audit/audit.module';
 import { RolesGuard } from './guards/roles.guard';
+import { resolveJwtSecret } from './jwt.secret';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { RolesGuard } from './guards/roles.guard';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'pumaia-default-secret-change-in-env',
+        secret: resolveJwtSecret(config),
         signOptions: {
           expiresIn: (config.get<string>('JWT_EXPIRES_IN') || '15m') as any,
         },
@@ -27,6 +28,12 @@ import { RolesGuard } from './guards/roles.guard';
   ],
   controllers: [AutenticacionController],
   providers: [AutenticacionService, JwtStrategy, RolesGuard],
-  exports: [AutenticacionService, JwtStrategy, RolesGuard, PassportModule, JwtModule],
+  exports: [
+    AutenticacionService,
+    JwtStrategy,
+    RolesGuard,
+    PassportModule,
+    JwtModule,
+  ],
 })
 export class AutenticacionModule {}

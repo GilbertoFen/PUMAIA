@@ -7,12 +7,15 @@ import {
   IsArray,
   ValidateNested,
   IsUUID,
+  Min,
+  ArrayMaxSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { RosterOrigin, RosterStatus } from '@prisma/client';
 
 export class AddRosterStudentDto {
   @IsInt()
+  @Min(1)
   @IsNotEmpty()
   accountNumber: number;
 
@@ -35,6 +38,7 @@ export class UploadRosterDto {
   fileName?: string;
 
   @IsArray()
+  @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => AddRosterStudentDto)
   students: AddRosterStudentDto[];
@@ -73,6 +77,7 @@ export class CreateScheduleImportDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20)
   @ValidateNested({ each: true })
   @Type(() => ScheduleImportItemDto)
   items?: ScheduleImportItemDto[];

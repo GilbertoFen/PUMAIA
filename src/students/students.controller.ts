@@ -39,7 +39,10 @@ export class StudentsController {
     return students.map((student) => ({
       id: student.id,
       accountNumber: student.accountNumber,
-      fullName: `${student.user.name} ${student.user.lastNameP} ${student.user.lastNameM || ''}`.trim().toUpperCase(),
+      fullName:
+        `${student.user.name} ${student.user.lastNameP} ${student.user.lastNameM || ''}`
+          .trim()
+          .toUpperCase(),
       academicInfo: {
         semester: student.currentSemester,
         average: student.average,
@@ -55,7 +58,9 @@ export class StudentsController {
   @Get('profile-summary')
   async getProfile(@CurrentUser() user: AuthUser) {
     if (!user.studentId) {
-      throw new BadRequestException('El usuario autenticado no posee un perfil de alumno asociado.');
+      throw new BadRequestException(
+        'El usuario autenticado no posee un perfil de alumno asociado.',
+      );
     }
     return this.service.getFullProfileSummary(user.studentId);
   }
@@ -74,11 +79,13 @@ export class StudentsController {
     }
 
     // Regla de aislamiento: un alumno solo puede consultar su propia información
-    const isStudent = user.roles.includes(RoleType.STUDENT);
     const isAdmin = user.roles.includes(RoleType.INSTITUTION_ADMIN);
 
-    if (isStudent && !isAdmin && user.accountNumber !== parsedAccount) {
-      throw new ForbiddenException('No tienes autorización para consultar la información de otro alumno.');
+    // Solo el administrador institucional o el propio alumno (profesores y analistas NO)
+    if (!isAdmin && user.accountNumber !== parsedAccount) {
+      throw new ForbiddenException(
+        'No tienes autorización para consultar la información de otro alumno.',
+      );
     }
 
     const student = await this.service.findByAccountNumber(parsedAccount);
@@ -92,7 +99,10 @@ export class StudentsController {
     return {
       id: student.id,
       accountNumber: student.accountNumber,
-      fullName: `${student.user.name} ${student.user.lastNameP} ${student.user.lastNameM || ''}`.trim().toUpperCase(),
+      fullName:
+        `${student.user.name} ${student.user.lastNameP} ${student.user.lastNameM || ''}`
+          .trim()
+          .toUpperCase(),
       academicInfo: {
         semester: student.currentSemester,
         average: student.average,
@@ -142,7 +152,9 @@ export class StudentsController {
         : user.studentId;
 
     if (!targetStudentId) {
-      throw new BadRequestException('No se pudo resolver el perfil del estudiante.');
+      throw new BadRequestException(
+        'No se pudo resolver el perfil del estudiante.',
+      );
     }
 
     return this.service.assignContest(targetStudentId, data.contestId);
@@ -157,11 +169,15 @@ export class StudentsController {
     @Body('interest') interest: string,
   ) {
     if (!user.studentId) {
-      throw new BadRequestException('Solo alumnos pueden actualizar sus intereses.');
+      throw new BadRequestException(
+        'Solo alumnos pueden actualizar sus intereses.',
+      );
     }
 
     if (typeof interest !== 'string') {
-      throw new BadRequestException('La propiedad "interest" debe ser una cadena de texto válida.');
+      throw new BadRequestException(
+        'La propiedad "interest" debe ser una cadena de texto válida.',
+      );
     }
 
     return this.service.updateInterests(user.studentId, interest);
@@ -181,7 +197,9 @@ export class StudentsController {
     }
 
     if (!user.studentId) {
-      throw new BadRequestException('Solo los alumnos pueden cargar avatar mediante este endpoint.');
+      throw new BadRequestException(
+        'Solo los alumnos pueden cargar avatar mediante este endpoint.',
+      );
     }
 
     return this.service.uploadAvatar(user.studentId, file);

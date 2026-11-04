@@ -1,10 +1,12 @@
 import {
   IsEmail,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   Min,
   MinLength,
@@ -43,7 +45,10 @@ export class RefreshTokenDto {
 }
 
 export class RegisterDto {
-  @IsEmail({}, { message: 'El correo electrónico debe tener un formato válido.' })
+  @IsEmail(
+    {},
+    { message: 'El correo electrónico debe tener un formato válido.' },
+  )
   @IsNotEmpty({ message: 'El correo institucional es obligatorio.' })
   email: string;
 
@@ -127,7 +132,9 @@ export class ResetPasswordDto {
   token: string;
 
   @IsString()
-  @MinLength(8, { message: 'La nueva contraseña debe tener al menos 8 caracteres.' })
+  @MinLength(8, {
+    message: 'La nueva contraseña debe tener al menos 8 caracteres.',
+  })
   newPassword: string;
 }
 
@@ -150,4 +157,14 @@ export class InviteStaffDto {
 
   @IsEnum(RoleType)
   role: RoleType;
+
+  // Rol PROFESSOR: id del profesor YA cargado en el sistema al que se liga esta cuenta
+  @IsOptional()
+  @IsUUID()
+  professorId?: string;
+
+  // Rol PROFESSOR: solo si de verdad es un profesor nuevo (evita duplicados)
+  @IsOptional()
+  @IsBoolean()
+  createNewProfessor?: boolean;
 }

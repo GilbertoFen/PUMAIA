@@ -1,4 +1,13 @@
-import { IsUUID, IsNotEmpty, IsString, IsOptional, IsInt, Min } from 'class-validator';
+import {
+  IsUUID,
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsInt,
+  Min,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateSectionDto {
   @IsUUID()
@@ -20,10 +29,11 @@ export class CreateSectionDto {
 
   @IsOptional()
   @IsString()
+  @MinLength(6)
+  @MaxLength(20)
   joinCode?: string;
 
   @IsOptional()
   @IsUUID()
   professorId?: string;
 }
-
