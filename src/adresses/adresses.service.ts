@@ -70,7 +70,16 @@ export class AdressesService {
 
   //UPDATE
   update(id: string, updateAdressDto: UpdateAdressDto) {
-    return this.prisma.address.update({ where: { id }, data: updateAdressDto });
+    return this.prisma.address.update({
+      where: { id },
+      data: {
+        ...(updateAdressDto.calle !== undefined ? { street: updateAdressDto.calle } : {}),
+        ...(updateAdressDto.cp !== undefined ? { zipCode: updateAdressDto.cp } : {}),
+        ...(updateAdressDto.coloniaId !== undefined ? { coloniaId: updateAdressDto.coloniaId } : {}),
+        ...(updateAdressDto.municipioId !== undefined ? { municipioId: updateAdressDto.municipioId } : {}),
+        ...(updateAdressDto.estadoId !== undefined ? { stateId: updateAdressDto.estadoId } : {}),
+      },
+    });
   }
 
   updateEstado(id: string, updateEstadoDto: UpdateSpecDto) {

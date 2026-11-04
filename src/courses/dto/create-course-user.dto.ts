@@ -1,10 +1,11 @@
-import { IsNotEmpty, IsUUID } from "class-validator";
+import { IsNotEmpty, IsUUID, IsOptional } from 'class-validator';
 
 export class CreateCourseUserDto {
     @IsNotEmpty()
     @IsUUID()
     courseId: string;
+
+    @IsOptional()
     @IsUUID()
-    @IsNotEmpty()
-    studentId: string;
+    studentId?: string;
 }

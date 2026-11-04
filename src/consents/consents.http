@@ -1,0 +1,71 @@
+### =====================================================================
+### PUMAIA BACKEND - PRUEBAS DE CONSENTIMIENTOS Y AVISOS DE PRIVACIDAD
+### Modelos: PrivacyNotice, ConsentRecord (Append-only)
+### =====================================================================
+
+@baseUrl = http://localhost:3001
+@accessToken = {{loginDevStudent.response.body.accessToken}}
+
+### ---------------------------------------------------------------------
+### 1. CONSULTAR AVISOS DE PRIVACIDAD VIGENTES (PÚBLICO)
+### Retorna el texto y la versión activa de TERMS_AND_NOTICE, ANALYTICS e IMPROVEMENT
+### ---------------------------------------------------------------------
+GET {{baseUrl}}/api/consents/notices
+
+### ---------------------------------------------------------------------
+### 2. CONSULTAR ESTADO DE CONSENTIMIENTOS DEL USUARIO AUTENTICADO
+### Retorna si el usuario tiene aceptada la versión vigente o requiere actualización
+### Requiere JWT
+### ---------------------------------------------------------------------
+GET {{baseUrl}}/api/consents/status
+Authorization: Bearer {{accessToken}}
+
+### ---------------------------------------------------------------------
+### 3. CONSULTAR HISTORIAL INMUTABLE DE CONSENTIMIENTOS DEL USUARIO
+### Retorna todas las filas de ConsentRecord históricas
+### Requiere JWT
+### ---------------------------------------------------------------------
+GET {{baseUrl}}/api/consents/history
+Authorization: Bearer {{accessToken}}
+
+### ---------------------------------------------------------------------
+### 4. REGISTRAR CONSENTIMIENTO INDIVIDUAL (APPEND-ONLY)
+### Tipos: TERMS_AND_NOTICE, ANALYTICS, IMPROVEMENT
+### ---------------------------------------------------------------------
+POST {{baseUrl}}/api/consents
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "kind": "TERMS_AND_NOTICE",
+  "noticeId": "UUID_DEL_AVISO_VIGENTE",
+  "granted": true
+}
+
+### ---------------------------------------------------------------------
+### 5. REGISTRAR CONSENTIMIENTOS EN LOTE (ONBOARDING)
+### ---------------------------------------------------------------------
+POST {{baseUrl}}/api/consents/batch
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "consents": [
+    {
+      "kind": "TERMS_AND_NOTICE",
+      "noticeId": "UUID_DEL_AVISO_TERMS",
+      "granted": true
+    },
+    {
+      "kind": "ANALYTICS",
+      "noticeId": "UUID_DEL_AVISO_ANALYTICS",
+      "granted": true
+    },
+    {
+      "kind": "IMPROVEMENT",
+      "noticeId": "UUID_DEL_AVISO_IMPROVEMENT",
+      "granted": false
+    }
+  ]
+}
+

@@ -1,0 +1,23 @@
+@baseUrl = http://localhost:3001/api
+@adminToken = Bearer eyJhbGciOi...
+
+### Métricas de Rendimiento Académico (Admin / Analyst)
+GET {{baseUrl}}/metrics/academic-performance
+Authorization: {{adminToken}}
+
+### Métricas de Rezago y Riesgo Académico (Admin / Analyst)
+GET {{baseUrl}}/metrics/retention-risk
+Authorization: {{adminToken}}
+
+### Métricas Agregadas de Asistencia por Grupo (Admin / Analyst)
+GET {{baseUrl}}/metrics/attendance
+Authorization: {{adminToken}}
+
+### Tendencias Temáticas de Consultas IA (Admin / Analyst)
+GET {{baseUrl}}/metrics/chat-topics
+Authorization: {{adminToken}}
+
+### Métricas de Satisfacción de Cuestionarios (Admin / Analyst)
+GET {{baseUrl}}/metrics/satisfaction?kind=ONBOARDING
+Authorization: {{adminToken}}
+

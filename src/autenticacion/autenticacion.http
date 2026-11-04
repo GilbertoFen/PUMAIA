@@ -1,0 +1,160 @@
+### =====================================================================
+### PUMAIA BACKEND - PRUEBAS DE AUTENTICACIÓN Y ROLES
+### Arquitectura: Login Tradicional (Argon2id + Verificación) / Google OAuth / JWT (15m) / Cookie Refresh (7d)
+### Base de datos local de pruebas: postgresql://127.0.0.1:5433/pumaia_test?schema=public
+### =====================================================================
+
+@baseUrl = http://localhost:3001
+@accessToken = {{loginStudent.response.body.accessToken}}
+
+### ---------------------------------------------------------------------
+### 1. REGISTRO TRADICIONAL DE ALUMNO (POST /api/autenticacion/register)
+### Reglas:
+### - Correo institucional obligatorio: <numero_cuenta>@pcpuma.acatlan.unam.mx (1 a 9 dígitos)
+### - Crea User + Student + passwordHash (Argon2id) + verificationTokenHash (SHA-256)
+### - Registra STUDENT_REGISTERED_PENDING_VERIFICATION en public.bitacora_auditoria
+### - Envía correo de verificación (en local también se guarda en ./tmp/email-outbox.json)
+### ---------------------------------------------------------------------
+# @name registerStudent
+POST {{baseUrl}}/api/autenticacion/register
+Content-Type: application/json
+
+{
+  "email": "321191399@pcpuma.acatlan.unam.mx",
+  "password": "A12345678!",
+  "name": "Alumno",
+  "lastNameP": "Prueba",
+  "lastNameM": "Registro"
+}
+
+### ---------------------------------------------------------------------
+### 2. VERIFICACIÓN DE CORREO ELECTRÓNICO (POST /api/autenticacion/verify-email)
+### Toma el token de 64 caracteres hex del enlace enviado al correo (o ./tmp/email-outbox.json)
+### ---------------------------------------------------------------------
+# @name verifyEmail
+POST {{baseUrl}}/api/autenticacion/verify-email
+Content-Type: application/json
+
+{
+  "email": "318777666@pcpuma.acatlan.unam.mx",
+  "token": "REEMPLAZAR_CON_TOKEN_DE_VERIFICACION_64_HEX"
+}
+
+### ---------------------------------------------------------------------
+### 3. LOGIN TRADICIONAL CON CORREO Y CONTRASEÑA (POST /api/autenticacion/login)
+### Requiere que emailVerifiedAt no sea nulo. Emite accessToken (15m) y cookie httpOnly puma_refresh_token (7d)
+### ---------------------------------------------------------------------
+# @name loginStudent
+POST {{baseUrl}}/api/autenticacion/login
+Content-Type: application/json
+
+{
+  "email": "318777666@pcpuma.acatlan.unam.mx",
+  "password": "PumaPassword2026!"
+}
+
+### ---------------------------------------------------------------------
+### 4. SOLICITAR RECUPERACIÓN DE CONTRASEÑA (POST /api/autenticacion/forgot-password)
+### Respuesta uniforme contra enumeración de cuentas; envía enlace de recuperación
+### ---------------------------------------------------------------------
+# @name forgotPassword
+POST {{baseUrl}}/api/autenticacion/forgot-password
+Content-Type: application/json
+
+{
+  "email": "318777666@pcpuma.acatlan.unam.mx"
+}
+
+### ---------------------------------------------------------------------
+### 5. RESTABLECER CONTRASEÑA CON TOKEN (POST /api/autenticacion/reset-password)
+### Actualiza passwordHash, revoca todas las sesiones activas y limpia bloqueos
+### ---------------------------------------------------------------------
+# @name resetPassword
+POST {{baseUrl}}/api/autenticacion/reset-password
+Content-Type: application/json
+
+{
+  "email": "318777666@pcpuma.acatlan.unam.mx",
+  "token": "REEMPLAZAR_CON_TOKEN_RESET_64_HEX",
+  "newPassword": "NuevaPumaPassword2026#"
+}
+
+### ---------------------------------------------------------------------
+### 6. LOGIN CON GOOGLE (PRODUCCIÓN / INTEGRACIÓN REAL)
+### Requiere un idToken emitido por el SDK de Google Sign-In de la UNAM
+### ---------------------------------------------------------------------
+# @name loginGoogle
+POST {{baseUrl}}/api/autenticacion/google
+Content-Type: application/json
+
+{
+  "idToken": "TU_GOOGLE_ID_TOKEN_AQUI"
+}
+
+### ---------------------------------------------------------------------
+### 7. DEV-LOGIN (PRUEBAS LOCALES): AUTORREGISTRO DE ALUMNO VÁLIDO
+### Condiciones:
+### - ENABLE_DEV_LOGIN=true en archivo .env y NODE_ENV != production
+### - Correo institucional terminado en @pcpuma.acatlan.unam.mx
+### ---------------------------------------------------------------------
+# @name loginDevStudent
+POST {{baseUrl}}/api/autenticacion/dev-login
+Content-Type: application/json
+
+{
+  "email": "318291029@pcpuma.acatlan.unam.mx",
+  "name": "Gilberto Alumno FES"
+}
+
+### ---------------------------------------------------------------------
+### 8. DEV-LOGIN (CASO DE ERROR): CORREO CON FORMATO DE CUENTA INVÁLIDO
+### Esperado: 400 Bad Request
+### ---------------------------------------------------------------------
+POST {{baseUrl}}/api/autenticacion/dev-login
+Content-Type: application/json
+
+{
+  "email": "correo_sin_cuenta@pcpuma.acatlan.unam.mx",
+  "name": "Usuario Invalido"
+}
+
+### ---------------------------------------------------------------------
+### 9. DEV-LOGIN (CASO DE ERROR): STAFF / PROFESOR NO REGISTRADO PREVIAMENTE
+### Esperado: 401 Unauthorized (requiere invitación previa)
+### ---------------------------------------------------------------------
+POST {{baseUrl}}/api/autenticacion/dev-login
+Content-Type: application/json
+
+{
+  "email": "profesor.desconocido@acatlan.unam.mx",
+  "name": "Profesor No Invitado"
+}
+
+### ---------------------------------------------------------------------
+### 10. CONSULTAR PERFIL DEL USUARIO AUTENTICADO (GET /api/autenticacion/me)
+### Valida que el JWT resuelva correctamente: userId, studentId y roles
+### Requiere: Authorization Bearer
+### ---------------------------------------------------------------------
+# @name getMe
+GET {{baseUrl}}/api/autenticacion/me
+Authorization: Bearer {{accessToken}}
+
+### ---------------------------------------------------------------------
+### 11. RENOVAR SESIÓN (POST /api/autenticacion/refresh)
+### Toma automáticamente la cookie 'puma_refresh_token' emitida en el login
+### O alternativamente envía refreshToken en el body JSON
+### ---------------------------------------------------------------------
+# @name refreshToken
+POST {{baseUrl}}/api/autenticacion/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": ""
+}
+
+### ---------------------------------------------------------------------
+### 12. CERRAR SESIÓN (POST /api/autenticacion/logout)
+### Limpia la cookie httpOnly y revoca la sesión en public.sesion_autenticacion
+### ---------------------------------------------------------------------
+POST {{baseUrl}}/api/autenticacion/logout
+Authorization: Bearer {{accessToken}}

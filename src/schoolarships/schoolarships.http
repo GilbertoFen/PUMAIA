@@ -1,22 +1,35 @@
-POST http://localhost:3001/api/schoolarships
+@baseUrl = http://localhost:3001/api
+@authToken = Bearer eyJhbGciOi...
+
+### Crear Beca en Catálogo (Admin)
+POST {{baseUrl}}/schoolarships
+Authorization: {{authToken}}
 Content-Type: application/json
 
 {
-    "name": "Beca Santander",
-    "categoryId":"e9dcfa15-0f22-455d-828d-d43c28c10489"
+  "name": "Beca de Excelencia Académica",
+  "categoryId": "CAT_UUID_HERE"
 }
 
-###
-POST http://localhost:3001/api/schoolarships/assign
+### Listar Becas en Catálogo
+GET {{baseUrl}}/schoolarships
+Authorization: {{authToken}}
+
+### Asignar Beca a Alumno (Alumno autenticado)
+POST {{baseUrl}}/schoolarships/assign
+Authorization: {{authToken}}
 Content-Type: application/json
 
 {
-    "schoolarshipId":"e6575758-2e87-4cd8-b134-dc5e957a787c",
-    "studentId":"d2ee86f2-8174-4f57-a9b9-db6c70db8342"
-
+  "schoolarshipId": "SCHOLARSHIP_UUID_HERE",
+  "startedAt": "2025-01-15T00:00:00.000Z",
+  "endsAt": "2025-06-30T00:00:00.000Z"
 }
-###
-GET http://localhost:3001/api/schoolarships
 
+### Consultar Becas de un Alumno
+GET {{baseUrl}}/schoolarships/student/STUDENT_UUID_HERE
+Authorization: {{authToken}}
 
-
+### Eliminar Asignación de Beca (Alumno propietario)
+DELETE {{baseUrl}}/schoolarships/assign/ASSIGNMENT_UUID_HERE
+Authorization: {{authToken}}

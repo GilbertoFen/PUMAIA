@@ -1,22 +1,29 @@
-POST http://localhost:3001/api/contests
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkMmVlODZmMi04MTc0LTRmNTctYTliOS1kYjZjNzBkYjgzNDIiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4OTE5ODc0LCJleHAiOjE3Nzg5MjcwNzR9.TFobvUMz13-7jX9Lj47eiBUV7qtYMnsjpNKMMHStMe4
+@baseUrl = http://localhost:3001/api
+@authToken = Bearer eyJhbGciOi...
+
+### Crear Concurso en Catálogo (Admin)
+POST {{baseUrl}}/contests
+Authorization: {{authToken}}
 Content-Type: application/json
 
 {
-    "name":"Hackaton NESTJS",
-    "categoryId": "e9dcfa15-0f22-455d-828d-d43c28c10489"
+  "name": "Hackatón UNAM 2025",
+  "categoryId": "CAT_UUID_HERE"
 }
-###
-POST http://localhost:3001/api/contests/enroll
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkMmVlODZmMi04MTc0LTRmNTctYTliOS1kYjZjNzBkYjgzNDIiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4OTE5ODc0LCJleHAiOjE3Nzg5MjcwNzR9.TFobvUMz13-7jX9Lj47eiBUV7qtYMnsjpNKMMHStMe4
+
+### Listar Concursos en Catálogo
+GET {{baseUrl}}/contests
+Authorization: {{authToken}}
+
+### Inscribir Alumno a un Concurso (Alumno autenticado)
+POST {{baseUrl}}/contests/enroll
+Authorization: {{authToken}}
 Content-Type: application/json
 
 {
-    "studentId":"d2ee86f2-8174-4f57-a9b9-db6c70db8342",
-    "contestId":"f44965e8-35a2-46df-99f0-cb6c78e58d49"
+  "contestId": "CONTEST_UUID_HERE"
 }
 
-###
-GET http://localhost:3001/api/contests
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJkMmVlODZmMi04MTc0LTRmNTctYTliOS1kYjZjNzBkYjgzNDIiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4OTI1MTU1LCJleHAiOjE3Nzg5MzIzNTV9.is4yuw26zwxCeEES3VH-WinGA7RIwMD4r-NrOBQTWMw
-
+### Eliminar Inscripción a Concurso (Alumno propietario)
+DELETE {{baseUrl}}/contests/enrollment/REGISTRATION_UUID_HERE
+Authorization: {{authToken}}

@@ -1,5 +1,11 @@
+import { IsOptional, IsString } from 'class-validator';
+
 export class UpdateLanguageUserDto {
-    studentId?: string;
-    languageId?: string;
-    skillId?: string;
+  @IsOptional()
+  @IsString()
+  languageId?: string;
+
+  @IsOptional()
+  @IsString()
+  skillId?: string;
 }

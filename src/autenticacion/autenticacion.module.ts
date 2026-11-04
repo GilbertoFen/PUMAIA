@@ -1,27 +1,32 @@
 import { Module } from '@nestjs/common';
 import { AutenticacionService } from './autenticacion.service';
 import { AutenticacionController } from './autenticacion.controller';
-import { JwtModule } from '@nestjs/jwt';
+import { PrismaModule } from '../prisma/prisma.module';
 import { PassportModule } from '@nestjs/passport';
-import {JwtStrategy} from './jwt.strategy';
-import { ConfigService } from '@nestjs/config';
-import { StudentsModule } from 'src/students/students.module';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { JwtStrategy } from './jwt.strategy';
+import { AuditModule } from '../audit/audit.module';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
-  controllers: [AutenticacionController],
-  providers: [AutenticacionService, JwtStrategy],
   imports: [
-    StudentsModule,
-    PassportModule, 
+    PrismaModule,
+    AuditModule,
+    PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
+      imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') as string,
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET') || 'pumaia-default-secret-change-in-env',
         signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRES_IN') as any,
+          expiresIn: (config.get<string>('JWT_EXPIRES_IN') || '15m') as any,
         },
       }),
     }),
   ],
+  controllers: [AutenticacionController],
+  providers: [AutenticacionService, JwtStrategy, RolesGuard],
+  exports: [AutenticacionService, JwtStrategy, RolesGuard, PassportModule, JwtModule],
 })
 export class AutenticacionModule {}

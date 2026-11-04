@@ -1,0 +1,29 @@
+@baseUrl = http://localhost:3001/api
+@authToken = Bearer eyJhbGciOi...
+
+### Registrar Documento de Conocimiento Institucional (Admin)
+POST {{baseUrl}}/knowledge-documents
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "institutionId": "INSTITUTION_UUID_HERE",
+  "title": "Reglamento General de Exámenes UNAM",
+  "version": "2024-1",
+  "sourceUrl": "https://www.dgae.unam.mx/normatividad/reglamento_examenes.pdf"
+}
+
+### Listar Documentos de Conocimiento (Admin / Analyst)
+GET {{baseUrl}}/knowledge-documents
+Authorization: {{authToken}}
+
+### Actualizar Estado de Documento (Admin)
+PATCH {{baseUrl}}/knowledge-documents/DOC_UUID_HERE
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "status": "INDEXED",
+  "chunkCount": 142
+}
+

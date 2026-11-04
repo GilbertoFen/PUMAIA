@@ -1,9 +1,9 @@
-import { IsUUID, IsNotEmpty } from 'class-validator';
+import { IsUUID, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class EnrollStudentDto {
+  @IsOptional()
   @IsUUID()
-  @IsNotEmpty()
-  studentId!: string;
+  studentId?: string;
 
   @IsUUID()
   @IsNotEmpty()

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateAreaExpertiseDto } from './dto/create-area-expertise.dto';
+
 @Injectable()
 export class AreasExpertiseService {
     constructor(private prisma: PrismaService) { }

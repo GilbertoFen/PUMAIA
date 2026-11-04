@@ -40,32 +40,61 @@ enum UserStatus {
 }
 
 // [NUEVO] La cuenta: identidad compartida por alumno, profesor y administrador.
-// Saca de Student: nombre, apellidos, correo, avatar. La contraseña desaparece (entra con Google).
+// Soporta autenticación institucional híbrida (Google OAuth + Correo y Contraseña verificada).
 model User {
-  id              String                  @id @default(uuid()) @map("id_usuario")
-  institutionId   String                  @map("id_institucion")
-  institution     Institution             @relation(fields: [institutionId], references: [id])
-  email           String                  @unique @map("correo") // en minúsculas
-  googleSub       String?                 @unique @map("google_sub") // id estable de Google
-  emailVerifiedAt DateTime?               @map("correo_verificado_en")
-  name            String                  @map("nombre")
-  lastNameP       String                  @map("apellido_paterno")
-  lastNameM       String?                 @map("apellido_materno")
-  avatarUrl       String?                 @map("avatar_url")
-  status          UserStatus              @default(ACTIVE) @map("estado")
-  lastLoginAt     DateTime?               @map("ultimo_acceso_en")
-  createdAt       DateTime                @default(now()) @map("creado_en")
-  deletedAt       DateTime?               @map("eliminado_en")
-  roles           UserRole[]
-  student         Student?
-  professor       Professor?
-  personalProfile PersonalProfile?
-  contactMethods  ContactMethod[]
-  consents        ConsentRecord[]
-  notifPrefs      NotificationPreference?
+  id                     String                  @id @default(uuid()) @map("id_usuario")
+  institutionId          String                  @map("id_institucion")
+  institution            Institution             @relation(fields: [institutionId], references: [id])
+  email                  String                  @unique @map("correo") // en minúsculas
+  googleSub              String?                 @unique @map("google_sub") // id estable de Google
+  passwordHash           String?                 @map("password_hash")
+  failedLoginAttempts    Int                     @default(0) @map("intentos_fallidos")
+  lockedUntil            DateTime?               @map("bloqueado_hasta")
+  verificationTokenHash  String?                 @map("token_verificacion_hash")
+  verificationExpiresAt  DateTime?               @map("verificacion_expira_en")
+  resetPasswordTokenHash String?                 @map("token_recuperacion_hash")
+  resetPasswordExpiresAt DateTime?               @map("recuperacion_expira_en")
+  emailVerifiedAt        DateTime?               @map("correo_verificado_en")
+  name                   String                  @map("nombre")
+  lastNameP              String                  @map("apellido_paterno")
+  lastNameM              String?                 @map("apellido_materno")
+  avatarUrl              String?                 @map("avatar_url")
+  status                 UserStatus              @default(ACTIVE) @map("estado")
+  lastLoginAt            DateTime?               @map("ultimo_acceso_en")
+  createdAt              DateTime                @default(now()) @map("creado_en")
+  deletedAt              DateTime?               @map("eliminado_en")
+  roles                  UserRole[]
+  sessions               AuthSession[]
+  student                Student?
+  professor              Professor?
+  personalProfile        PersonalProfile?
+  contactMethods         ContactMethod[]
+  consents               ConsentRecord[]
+  notifPrefs             NotificationPreference?
 
   @@index([institutionId])
   @@map("usuario")
+}
+
+// [NUEVO] Sesiones independientes por dispositivo con rotación y detección de reúso de refresh tokens.
+model AuthSession {
+  id                String    @id @default(uuid()) @map("id_sesion")
+  userId            String    @map("id_usuario")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash  String    @map("refresh_token_hash")
+  previousTokenHash String?   @map("previous_token_hash")
+  familyId          String    @map("id_familia")
+  userAgent         String?   @map("agente_usuario")
+  ipAddress         String?   @map("direccion_ip")
+  expiresAt         DateTime  @map("expira_en")
+  revokedAt         DateTime? @map("revocado_en")
+  revokedReason     String?   @map("motivo_revocacion")
+  createdAt         DateTime  @default(now()) @map("creado_en")
+  rotatedAt         DateTime  @default(now()) @map("rotado_en")
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("sesion_autenticacion")
 }
 
 enum RoleType {

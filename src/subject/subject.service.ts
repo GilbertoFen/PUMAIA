@@ -1,197 +1,210 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
-//Dto's
 import { CreateSubjectDto } from './dto/createSubject.dto';
 import { UpdateSubjectDto } from './dto/updateSubject.dto';
 import { procesarYValidarHistorial } from '../utils/parser-pdf';
 import { MateriaTemporal } from '../utils/types.js';
-
-import { BadRequestException } from '@nestjs/common';
-
+import { EnrollmentStatus, EnrollmentSource } from '@prisma/client';
 
 @Injectable()
 export class SubjectService {
+  constructor(private prisma: PrismaService) {}
 
-    constructor(private prisma: PrismaService) { }
+  async getAllSubjects() {
+    return this.prisma.subject.findMany({
+      include: {
+        category: true,
+        studyPlan: true,
+      },
+      orderBy: { subject: 'asc' },
+    });
+  }
 
-    //GET
-    async getAllSubjects() {
-        try {
-            return await this.prisma.subject.findMany();
-        } catch (error) {
-            console.error('ERROR EN GET ALL SUBJECTS:', error);
-            throw error;
-        }
+  async getSubjectById(id: string) {
+    const subject = await this.prisma.subject.findUnique({
+      where: { id },
+      include: {
+        category: true,
+        studyPlan: true,
+        prerequisites: {
+          include: { prerequisite: true },
+        },
+      },
+    });
+
+    if (!subject) {
+      throw new NotFoundException(`Materia con ID ${id} no encontrada.`);
     }
 
-    async getSubjectById(id: string) {
-        try {
-            return await this.prisma.subject.findUnique({
-                where: { id },
-            });
-        } catch (error) {
-            console.error('ERROR EN GET SUBJECT BY ID:', error);
-            throw error;
-        }
+    return subject;
+  }
+
+  async createSubject(dto: CreateSubjectDto) {
+    return this.prisma.subject.create({
+      data: {
+        subject: dto.subject,
+        code: dto.code,
+        semester: dto.semester,
+        credits: dto.credits,
+        category: { connect: { id: dto.categoryID } },
+        ...(dto.studyPlanId ? { studyPlan: { connect: { id: dto.studyPlanId } } } : {}),
+      },
+      include: {
+        category: true,
+        studyPlan: true,
+      },
+    });
+  }
+
+  async updateSubject(id: string, dto: UpdateSubjectDto) {
+    await this.getSubjectById(id);
+
+    return this.prisma.subject.update({
+      where: { id },
+      data: {
+        subject: dto.subject,
+        code: dto.code,
+        semester: dto.semester,
+        credits: dto.credits,
+        ...(dto.categoryID ? { category: { connect: { id: dto.categoryID } } } : {}),
+        ...(dto.studyPlanId ? { studyPlan: { connect: { id: dto.studyPlanId } } } : {}),
+      },
+      include: {
+        category: true,
+        studyPlan: true,
+      },
+    });
+  }
+
+  async deleteSubject(id: string) {
+    await this.getSubjectById(id);
+
+    return this.prisma.subject.delete({
+      where: { id },
+    });
+  }
+
+  async analyzeAndMatchHistory(fileBuffer: Buffer) {
+    const markdown = await procesarYValidarHistorial(fileBuffer);
+
+    if (!markdown) {
+      throw new BadRequestException('El documento no es un historial válido.');
     }
 
-    //CREATE
-    async createSubject(dto: CreateSubjectDto) {
-        try {
-            return await this.prisma.subject.create({
-                data: {
-                    subject: dto.subject,
-                    category: {
-                        connect: { id: dto.categoryID },
-                    },
-                },
-            });
-        } catch (error) {
-            console.error('ERROR EN CREATE SUBJECT:', error);
-            throw error;
-        }
+    const materiasParaMatch: MateriaTemporal[] = [];
+    const materiaRegex = /-\s+\*\*(.+?)\*\*:\s+(\d+)/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = materiaRegex.exec(markdown)) !== null) {
+      materiasParaMatch.push({
+        nombre: match[1].trim(),
+        calificacion: parseInt(match[2], 10),
+      });
     }
 
-    //UPDATE
-    async updateSubject(id: string, dto: UpdateSubjectDto) {
-        try {
-            return await this.prisma.subject.update({
-                where: { id },
-                data: {
-                    subject: dto.subject,
-                    category: {
-                        connect: { id: dto.categoryID },
-                    },
-                },
-            });
-        } catch (error) {
-            console.error('ERROR EN UPDATE SUBJECT:', error);
-            throw error;
-        }
+    const catalogo = await this.prisma.subject.findMany();
+
+    const subjectsMatched = materiasParaMatch.map((mPDF) => {
+      const matchBD = catalogo.find(
+        (mBD) => this.normalizar(mBD.subject) === this.normalizar(mPDF.nombre),
+      );
+
+      return {
+        subjectID: matchBD?.id || null,
+        subjectName: mPDF.nombre,
+        grade: mPDF.calificacion,
+        exists: !!matchBD,
+      };
+    });
+
+    return {
+      rawMarkdown: markdown,
+      subjects: subjectsMatched,
+    };
+  }
+
+  private normalizar(t: string): string {
+    return t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  }
+
+  /**
+   * Procesa el PDF del historial, guarda inscripciones en Enrollment y actualiza promedio.
+   */
+  async saveAcademicHistory(studentId: string, fileBuffer: Buffer) {
+    const analysis = await this.analyzeAndMatchHistory(fileBuffer);
+    const validSubjects = analysis.subjects.filter((s) => s.exists && s.subjectID);
+
+    if (validSubjects.length === 0) {
+      throw new BadRequestException('No se encontraron materias válidas en el historial para guardar.');
     }
 
-    //DELETE
-    async deleteSubject(id: string) {
-        try {
-            return await this.prisma.subject.delete({
-                where: { id }
-            })
-        } catch (error) {
-            console.error('ERROR EN DELETE SUBJECT:', error);
-            throw error;
-        }
+    // Verificar titularidad del número de cuenta del PDF contra el alumno autenticado
+    const accountMatch = analysis.rawMarkdown.match(/\*\*Cuenta\*\*:\s*(\d+)/i);
+    if (accountMatch && this.prisma.student?.findUnique) {
+      const pdfAccount = parseInt(accountMatch[1], 10);
+      const student = await this.prisma.student.findUnique({ where: { id: studentId } });
+      if (student && student.accountNumber && student.accountNumber !== pdfAccount) {
+        throw new ForbiddenException(
+          `El número de cuenta del PDF (${pdfAccount}) no coincide con tu número de cuenta registrado (${student.accountNumber}).`,
+        );
+      }
     }
-    async analyzeAndMatchHistory(fileBuffer: Buffer) {
-        const markdown = await procesarYValidarHistorial(fileBuffer);
 
-        if (!markdown) {
-            throw new BadRequestException('El documento no es un historial válido.');
-        }
+    let newAverage = 0;
 
-        const materiasParaMatch: MateriaTemporal[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      for (const subject of validSubjects) {
+        const status = subject.grade >= 6 ? EnrollmentStatus.PASSED : EnrollmentStatus.FAILED;
 
-        const materiaRegex = /-\s+\*\*(.+?)\*\*:\s+(\d+)/g;
-        let match: RegExpExecArray | null;
-
-        while ((match = materiaRegex.exec(markdown)) !== null) {
-            materiasParaMatch.push({
-                nombre: match[1].trim(),
-                calificacion: parseInt(match[2], 10)
-            });
-        }
-
-        const catalogo = await this.prisma.subject.findMany();
-
-        const subjectsMatched = materiasParaMatch.map(mPDF => {
-            const matchBD = catalogo.find(mBD =>
-                this.normalizar(mBD.subject) === this.normalizar(mPDF.nombre)
-            );
-
-            return {
-                subjectID: matchBD?.id || null,
-                subjectName: mPDF.nombre,
-                grade: mPDF.calificacion,
-                exists: !!matchBD
-            };
+        const existingEnrollment = await tx.enrollment.findFirst({
+          where: {
+            studentId,
+            subjectId: subject.subjectID as string,
+          },
         });
 
-        return {
-            rawMarkdown: markdown,
-            subjects: subjectsMatched
-        };
-    }
-
-    private normalizar(t: string): string {
-        return t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-    }
-    // 🧮 NUEVO MÉTODO: Analizar, Guardar Calificaciones y Actualizar Promedio
-    // 🧮 MÉTODO MEJORADO: Analizar, Upsert de Calificaciones y Actualizar Promedio
-    async saveAcademicHistory(studentId: string, fileBuffer: Buffer) {
-        // 1. Analizamos el PDF
-        const analysis = await this.analyzeAndMatchHistory(fileBuffer);
-        
-        // 2. Filtramos solo las materias válidas
-        const validSubjects = analysis.subjects.filter(s => s.exists && s.subjectID);
-
-        if (validSubjects.length === 0) {
-            throw new BadRequestException('No se encontraron materias válidas en el historial para guardar.');
+        if (existingEnrollment) {
+          await tx.enrollment.update({
+            where: { id: existingEnrollment.id },
+            data: {
+              grade: subject.grade,
+              status,
+              source: EnrollmentSource.TRANSCRIPT,
+            },
+          });
+        } else {
+          await tx.enrollment.create({
+            data: {
+              studentId,
+              subjectId: subject.subjectID as string,
+              grade: subject.grade,
+              status,
+              attempt: 1,
+              source: EnrollmentSource.TRANSCRIPT,
+            },
+          });
         }
+      }
 
-        let newAverage = 0;
+      // Calcular promedio dinámico de inscripciones con calificación
+      const allEnrollments = await tx.enrollment.findMany({
+        where: { studentId, grade: { not: null } },
+      });
 
-        // 3. TRANSACCIÓN ATÓMICA: Hacemos el Upsert y recalculamos
-        await this.prisma.$transaction(async (tx) => {
-            
-            // A. UPSERT MANUAL: Iteramos sobre las materias que arrojó el PDF
-            for (const subject of validSubjects) {
-                // Buscamos si el alumno ya tiene esta materia registrada
-                const existingGrade = await tx.grades.findFirst({
-                    where: {
-                        studentId: studentId,
-                        subjectId: subject.subjectID as string,
-                    }
-                });
+      const sum = allEnrollments.reduce((acc, curr) => acc + (curr.grade || 0), 0);
+      newAverage = allEnrollments.length > 0 ? parseFloat((sum / allEnrollments.length).toFixed(2)) : 0;
 
-                if (existingGrade) {
-                    // Si ya existe, la actualizamos (por si mejoró su calificación)
-                    await tx.grades.update({
-                        where: { id: existingGrade.id },
-                        data: { grade: subject.grade }
-                    });
-                } else {
-                    // Si es nueva (ej. de un nuevo semestre), la insertamos
-                    await tx.grades.create({
-                        data: {
-                            studentId: studentId,
-                            subjectId: subject.subjectID as string,
-                            grade: subject.grade
-                        }
-                    });
-                }
-            }
+      await tx.student.update({
+        where: { id: studentId },
+        data: { average: newAverage },
+      });
+    });
 
-            // B. CALCULAR PROMEDIO REAL: Obtenemos todas sus calificaciones actuales en BD
-            const allGrades = await tx.grades.findMany({
-                where: { studentId: studentId }
-            });
-
-            // Sumamos y dividimos para sacar el promedio exacto
-            const sum = allGrades.reduce((acc, curr) => acc + curr.grade, 0);
-            newAverage = allGrades.length > 0 ? Math.round(sum / allGrades.length) : 0;
-
-            // C. Guardamos el promedio estático en el perfil del alumno
-            await tx.student.update({
-                where: { id: studentId },
-                data: { average: newAverage }
-            });
-        });
-
-        // 4. Devolvemos la respuesta al Frontend
-        return {
-            message: 'Historial procesado y actualizado correctamente (Upsert).',
-            subjectsProcessed: validSubjects.length,
-            newAverage: newAverage,
-            subjects: validSubjects
-        };
-    }
+    return {
+      message: 'Historial procesado y actualizado correctamente en inscripciones (Enrollment).',
+      subjectsProcessed: validSubjects.length,
+      newAverage,
+      subjects: validSubjects,
+    };
+  }
 }

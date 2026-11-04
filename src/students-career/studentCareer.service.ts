@@ -1,68 +1,132 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
-//Dto's
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateStudentCareerDto } from './dto/createStudentCareer.dto';
 import { UpdateStudentCareerDto } from './dto/updateStudentCareer.dto';
 
+/**
+ * Servicio deprecado: En el esquema Prisma v3, la relación Student-Career es directa
+ * mediante `Student.careerId` y `Student.isGraduated`. Este servicio adapta las peticiones
+ * históricas hacia el modelo Student para evitar regresiones.
+ */
 @Injectable()
 export class StudentCareerService {
-    constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(StudentCareerService.name);
 
-    //GET
-    async getAllStudentCareers() {
-        try {
-            return await this.prisma.studentCareer.findMany();
-        } catch (error) {
-            console.error('ERROR EN GET ALL STUDENT CAREERS:', error);
-            throw error;
-        }
+  constructor(private prisma: PrismaService) {}
+
+  async getAllStudentCareers() {
+    const students = await this.prisma.student.findMany({
+      include: {
+        career: true,
+      },
+    });
+
+    return students.map((s) => ({
+      id: s.id,
+      studentId: s.id,
+      careerId: s.careerId,
+      isGraduated: s.isGraduated,
+      career: s.career,
+    }));
+  }
+
+  async getStudentCareerById(id: string) {
+    const student = await this.prisma.student.findUnique({
+      where: { id },
+      include: { career: true },
+    });
+
+    if (!student) {
+      throw new NotFoundException(`Registro de alumno con ID ${id} no encontrado.`);
     }
 
-    async getStudentCareerById(id: string) {
-        try {
-            return await this.prisma.studentCareer.findUnique({
-                where: { id },
-            });
-        } catch (error) {
-            console.error('ERROR EN GET STUDENT CAREER BY ID:', error);
-            throw error;
-        }
+    return {
+      id: student.id,
+      studentId: student.id,
+      careerId: student.careerId,
+      isGraduated: student.isGraduated,
+      career: student.career,
+    };
+  }
+
+  async createStudentCareer(dto: CreateStudentCareerDto) {
+    // Validar existencia de la carrera
+    const career = await this.prisma.career.findUnique({
+      where: { id: dto.careerId },
+    });
+
+    if (!career) {
+      throw new NotFoundException(`Carrera con ID ${dto.careerId} no encontrada.`);
     }
 
-    //CREATE
-    async createStudentCareer(dto: CreateStudentCareerDto) {
-        try {
-            return await this.prisma.studentCareer.create({
-                data: { ...dto },
-            });
-        } catch (error) {
-            console.error('ERROR EN CREATE STUDENT CAREER:', error);
-            throw error;
-        }
+    const student = await this.prisma.student.findUnique({
+      where: { id: dto.studentId },
+    });
+
+    if (!student) {
+      throw new NotFoundException(`Alumno con ID ${dto.studentId} no encontrado.`);
     }
 
-    //UPDATE
-    async updateStudentCareer(id: string, dto: UpdateStudentCareerDto) {
-        try {
-            return await this.prisma.studentCareer.update({
-                where: { id },
-                data: { ...dto },
-            });
-        } catch (error) {
-            console.error('ERROR EN UPDATE STUDENT CAREER:', error);
-            throw error;
-        }
+    const updated = await this.prisma.student.update({
+      where: { id: dto.studentId },
+      data: {
+        careerId: dto.careerId,
+        isGraduated: dto.isGraduated ?? false,
+      },
+      include: { career: true },
+    });
+
+    return {
+      id: updated.id,
+      studentId: updated.id,
+      careerId: updated.careerId,
+      isGraduated: updated.isGraduated,
+      career: updated.career,
+    };
+  }
+
+  async updateStudentCareer(id: string, dto: UpdateStudentCareerDto) {
+    const student = await this.prisma.student.findUnique({
+      where: { id },
+    });
+
+    if (!student) {
+      throw new NotFoundException(`Alumno con ID ${id} no encontrado.`);
     }
 
-    //DELETE
-    async deleteStudentCareer(id: string) {
-        try {
-            return await this.prisma.studentCareer.delete({
-                where: { id },
-            });
-        } catch (error) {
-            console.error('ERROR EN DELETE STUDENT CAREER:', error);
-            throw error;
-        }
+    if (dto.careerId) {
+      const career = await this.prisma.career.findUnique({
+        where: { id: dto.careerId },
+      });
+      if (!career) throw new NotFoundException(`Carrera con ID ${dto.careerId} no encontrada.`);
     }
+
+    const updated = await this.prisma.student.update({
+      where: { id },
+      data: {
+        ...(dto.careerId ? { careerId: dto.careerId } : {}),
+        ...(dto.isGraduated !== undefined ? { isGraduated: dto.isGraduated } : {}),
+      },
+      include: { career: true },
+    });
+
+    return {
+      id: updated.id,
+      studentId: updated.id,
+      careerId: updated.careerId,
+      isGraduated: updated.isGraduated,
+      career: updated.career,
+    };
+  }
+
+  async deleteStudentCareer(id: string) {
+    // La carrera es un campo obligatorio en Student (Student.careerId).
+    // No se elimina físicamente el alumno; se reinicia isGraduated a false.
+    this.logger.warn(`deleteStudentCareer invocado para ${id}: reiniciando isGraduated a false.`);
+    return this.prisma.student.update({
+      where: { id },
+      data: { isGraduated: false },
+      select: { id: true, careerId: true, isGraduated: true },
+    });
+  }
 }

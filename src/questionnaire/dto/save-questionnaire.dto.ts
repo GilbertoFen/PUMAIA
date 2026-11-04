@@ -1,16 +1,24 @@
-import { IsArray, IsString, IsNotEmpty, IsObject, IsEnum } from 'class-validator';
-import { CategoriaPregunta } from '@prisma/client';
+import { IsArray, IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class AnswerItemDto {
   @IsString()
   @IsNotEmpty()
-  id: string; // El questionId del front
+  id: string;
 
-  @IsEnum(CategoriaPregunta)
-  category: CategoriaPregunta;
+  @IsOptional()
+  @IsString()
+  optionId?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  categoria?: string;
 
   @IsNotEmpty()
-  value: any; // Aquí puede venir el string, array o el objeto de proyectos
+  value: any;
 }
 
 export class SaveQuestionnaireDto {

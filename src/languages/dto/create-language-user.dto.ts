@@ -1,13 +1,15 @@
-import { IsEnum, IsUUID } from 'class-validator';
-import { CefrLevel } from 'src/common/enums/cefr-level.enum';
+import { IsUUID, IsOptional, IsNotEmpty, IsString } from 'class-validator';
 
 export class CreateLanguageUserDto {
+  @IsOptional()
   @IsUUID()
-  studentId: string;
+  studentId?: string;
 
   @IsUUID()
+  @IsNotEmpty()
   languageId: string;
 
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
   skillId: string;
 }

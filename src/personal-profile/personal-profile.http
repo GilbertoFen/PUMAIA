@@ -1,0 +1,36 @@
+@baseUrl = http://localhost:3001/api
+@authToken = Bearer eyJhbGciOi...
+
+### Consultar Mi Perfil Personal
+GET {{baseUrl}}/personal-profile/me
+Authorization: {{authToken}}
+
+### Actualizar Mi Perfil Personal
+PATCH {{baseUrl}}/personal-profile/me
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "preferredName": "Alex",
+  "birthDay": 15,
+  "birthMonth": 8,
+  "aboutMe": "Estudiante apasionado por la inteligencia artificial y el desarrollo de sistemas distribuidos."
+}
+
+### Listar Métodos de Contacto
+GET {{baseUrl}}/personal-profile/contacts
+Authorization: {{authToken}}
+
+### Agregar Método de Contacto
+POST {{baseUrl}}/personal-profile/contacts
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "type": "GITHUB",
+  "label": "GitHub Personal",
+  "value": "https://github.com/puma-developer",
+  "visibility": "PUBLIC",
+  "isPrimary": true
+}
+

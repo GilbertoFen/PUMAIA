@@ -6,17 +6,20 @@ import {
   Delete,
   Param,
   Body,
+  UseGuards,
 } from '@nestjs/common';
 import { CategoryService } from './category.service';
-//Dto's
 import { CreateCategoryDto } from './dto/createCategory.dto';
 import { UpdateCategoryDto } from './dto/updateCategory.dto';
+import { JwtAuthGuard } from '../autenticacion/guards/jwt-auth.guard';
+import { RolesGuard } from '../autenticacion/guards/roles.guard';
+import { Roles } from '../autenticacion/decorators/roles.decorator';
+import { RoleType } from '@prisma/client';
 
 @Controller('category')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
-  //GET
   @Get('')
   async getAllCategories() {
     try {
@@ -37,7 +40,8 @@ export class CategoryController {
     }
   }
 
-  //POST
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(RoleType.INSTITUTION_ADMIN)
   @Post('')
   async createCategory(@Body() dto: CreateCategoryDto) {
     try {
@@ -48,7 +52,8 @@ export class CategoryController {
     }
   }
 
-  //Put
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(RoleType.INSTITUTION_ADMIN)
   @Put(':id')
   async updateCategory(@Body() dto: UpdateCategoryDto, @Param('id') id: string) {
     try {
@@ -59,7 +64,8 @@ export class CategoryController {
     }
   }
 
-  //DELETE
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(RoleType.INSTITUTION_ADMIN)
   @Delete(':id')
   async deleteCategory(@Param('id') id: string) {
     try {
