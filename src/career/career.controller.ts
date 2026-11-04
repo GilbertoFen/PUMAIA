@@ -1,65 +1,46 @@
-import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { CareerService } from './career.service';
-//Dto's
 import { CreateCareerDto } from './dto/createCareer.dto';
 import { UpdateCareerDto } from './dto/updateCareer.dto';
+import { JwtAuthGuard } from '../autenticacion/guards/jwt-auth.guard';
+import { RolesGuard } from '../autenticacion/guards/roles.guard';
+import { Roles } from '../autenticacion/decorators/roles.decorator';
+import { RoleType } from '@prisma/client';
 
 @Controller('career')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class CareerController {
     constructor(private readonly careerService: CareerService) {}
 
-    //GET
+    // GET
     @Get('')
-    async getAllCareers(){
-         try{
-            return await this.careerService.getAllCareers()
-        }catch(error){
-            console.error('ERROR EN GET ALL CAREERS:', error);
-            throw error;
-        }
+    async getAllCareers() {
+        return this.careerService.getAllCareers();
     }
 
     @Get(':id')
-     async getCareerById(@Param('id') id: string){
-        try{
-            return await this.careerService.getCareerById(id)
-        }catch(error){
-            console.error('ERROR EN GET CAREER BY ID:', error);
-            throw error;
-        }
+    async getCareerById(@Param('id') id: string) {
+        return this.careerService.getCareerById(id);
     }
 
-    //POST
+    // POST (Administrador)
     @Post('')
-    async createCareer(@Body() dto: CreateCareerDto){
-        try{
-            return await this.careerService.createCareer(dto)
-        }catch(error){
-            console.error('ERROR EN POST CAREER:', error);
-            throw error;
-        }
+    @Roles(RoleType.INSTITUTION_ADMIN)
+    async createCareer(@Body() dto: CreateCareerDto) {
+        return this.careerService.createCareer(dto);
     }
     
-    //Put
+    // PUT (Administrador)
     @Put(':id')
-    async updateCareer(@Body() dto: UpdateCareerDto, @Param('id') id: string){
-        try{
-            return await this.careerService.updateCareer(id, dto)
-        }catch(error){
-            console.error('ERROR EN UPDATE CAREER:', error);
-            throw error;
-        }
+    @Roles(RoleType.INSTITUTION_ADMIN)
+    async updateCareer(@Body() dto: UpdateCareerDto, @Param('id') id: string) {
+        return this.careerService.updateCareer(id, dto);
     }
 
-    //DELETE
+    // DELETE (Administrador)
     @Delete(':id')
+    @Roles(RoleType.INSTITUTION_ADMIN)
     async deleteCareer(@Param('id') id: string) {
-      try {
-        return await this.careerService.deleteCareer(id);
-      } catch (error) {
-        console.error('ERROR EN DELETE CAREER:', error);
-        throw error;
-      }
+        return this.careerService.deleteCareer(id);
     }
-
 }

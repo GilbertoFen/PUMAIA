@@ -1,0 +1,5 @@
+@baseUrl = http://localhost:3001/api
+
+### Health Check General del Backend
+GET {{baseUrl}}/health
+

@@ -1,85 +1,104 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Req, UseGuards, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { GradeService } from './grade.service';
 import { CreateGradeDto } from './dto/createGrade.dto';
 import { UpdateGradeDto, ConfirmGradesDto } from './dto/updateGrade.dto';
-import { AuthGuard } from '@nestjs/passport';
+import { JwtAuthGuard } from '../autenticacion/guards/jwt-auth.guard';
+import { RolesGuard } from '../autenticacion/guards/roles.guard';
+import { Roles } from '../autenticacion/decorators/roles.decorator';
+import { CurrentUser } from '../autenticacion/decorators/current-user.decorator';
+import type { AuthUser } from '../autenticacion/interfaces/auth-user.interface';
+import { RoleType } from '@prisma/client';
 
 @Controller('grade')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class GradeController {
+  constructor(private readonly gradeService: GradeService) {}
 
-    constructor(private readonly gradeService: GradeService) { }
-
-    //GET
-    @Get('')
-    async getAllGrades() {
-        try {
-            return await this.gradeService.getAllGrades()
-        } catch (error) {
-            console.error('ERROR EN GET ALL GRADES:', error);
-            throw error;
-        }
+  /**
+   * Consulta el historial académico del alumno autenticado.
+   */
+  @Get('my-grades')
+  async getMyGrades(@CurrentUser() user: AuthUser) {
+    if (!user.studentId) {
+      throw new UnauthorizedException('No se pudo identificar el perfil de alumno asociado.');
     }
-    
-    @UseGuards(AuthGuard('jwt')) 
-    @Get('my-grades')
-    async getMyGrades(@Req() req: any) {
-        const studentId = req.user.userId;
-        console.log('stuentId extraído del token:', studentId);
+    return this.gradeService.getMyGrades(user.studentId);
+  }
 
-        if (!studentId) {
-            throw new UnauthorizedException('No se pudo identificar al alumno.');
-        }
+  /**
+   * Confirma y registra las materias validadas tras la importación del PDF o edición del alumno.
+   */
+  @Post('confirm-import')
+  async confirmImport(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ConfirmGradesDto,
+  ) {
+    if (!user.studentId) {
+      throw new UnauthorizedException('No se pudo identificar el perfil de alumno asociado.');
+    }
+    return this.gradeService.saveConfirmedGrades(user.studentId, dto);
+  }
 
-        return await this.gradeService.getMyGrades(studentId);
-    }
+  /**
+   * Consulta general de inscripciones (restringido exclusivamente a administradores institucionales).
+   * Los analistas consultan el rendimiento académico agregado en /api/metrics/academic-performance.
+   */
+  @Get('')
+  @Roles(RoleType.INSTITUTION_ADMIN)
+  async getAllGrades() {
+    return this.gradeService.getAllGrades();
+  }
 
-    @Get(':id')
-    async getGradeById(@Param('id') id: string) {
-        try {
-            return await this.gradeService.getGradeById(id)
-        } catch (error) {
-            console.error('ERROR EN GET GRADE BY ID:', error);
-            throw error;
-        }
-    }
+  /**
+   * Consulta una inscripción por ID.
+   */
+  @Get(':id')
+  @Roles(RoleType.INSTITUTION_ADMIN)
+  async getGradeById(@Param('id') id: string) {
+    return this.gradeService.getGradeById(id);
+  }
 
-    //POST
-    @Post('')
-    async createGrade(@Body() dto: CreateGradeDto) {
-        try {
-            return await this.gradeService.createGrade(dto)
-        } catch (error) {
-            console.error('ERROR EN POST GRADE:', error);
-            throw error;
-        }
-    }
+  /**
+   * Crea una inscripción manualmente (administrador).
+   */
+  @Post('')
+  @Roles(RoleType.INSTITUTION_ADMIN)
+  async createGrade(@Body() dto: CreateGradeDto) {
+    return this.gradeService.createGrade(dto);
+  }
 
-    //Put
-    @Put(':id')
-    async updateGrade(@Body() dto: UpdateGradeDto, @Param('id') id: string) {
-        try {
-            return await this.gradeService.updateGrade(id, dto)
-        } catch (error) {
-            console.error('ERROR EN UPDATE GRADE:', error);
-            throw error;
-        }
-    }
+  /**
+   * Actualiza una inscripción existente mediante PUT o PATCH (administrador).
+   */
+  @Put(':id')
+  @Roles(RoleType.INSTITUTION_ADMIN)
+  async updateGrade(@Body() dto: UpdateGradeDto, @Param('id') id: string) {
+    return this.gradeService.updateGrade(id, dto);
+  }
 
-    //DELETE
-    @Delete(':id')
-    async deleteGrade(@Param('id') id: string) {
-        try {
-            return await this.gradeService.deleteGrade(id)
-        } catch (error) {
-            console.error('ERROR EN DELETE GRADE:', error);
-            throw error;
-        }
-    }
-    @UseGuards(AuthGuard('jwt'))
-    @Post('confirm-import')
-    async confirmImport(@Req() req: any, @Body() dto: ConfirmGradesDto) {
-        console.log('Datos del usuario en el Request:', req.user);
-        const studentId = req.user.userId;
-        return await this.gradeService.saveConfirmedGrades(studentId, dto);
-    }
+  @Patch(':id')
+  @Roles(RoleType.INSTITUTION_ADMIN)
+  async patchGrade(@Body() dto: UpdateGradeDto, @Param('id') id: string) {
+    return this.gradeService.updateGrade(id, dto);
+  }
+
+  /**
+   * Elimina una inscripción (administrador).
+   */
+  @Delete(':id')
+  @Roles(RoleType.INSTITUTION_ADMIN)
+  async deleteGrade(@Param('id') id: string) {
+    return this.gradeService.deleteGrade(id);
+  }
 }

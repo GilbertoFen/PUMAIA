@@ -1,8 +1,33 @@
-###
-POST http://localhost:3001/api/study-plan/
+### Variables
+@baseUrl = http://localhost:3001/api
+
+### 1. Listar todos los planes de estudio
+GET {{baseUrl}}/study-plan/
+
+### 2. Consultar plan de estudio por ID
+GET {{baseUrl}}/study-plan/{{planId}}
+
+### 3. Crear nuevo plan de estudio (con enums StudyLevel y StudySystem)
+POST {{baseUrl}}/study-plan/
 Content-Type: application/json
 
 {
-    "studyPlan" : "2014",
-    "semesters" : 8
+    "studyPlan": "Plan de Estudios 2024",
+    "semesters": 8,
+    "level": "LICENCIATURA",
+    "system": "ESCOLARIZADO",
+    "totalCredits": 380,
+    "optionalCredits": 48,
+    "firstGeneration": 2024
 }
+
+### 4. Actualizar plan de estudio
+PUT {{baseUrl}}/study-plan/{{planId}}
+Content-Type: application/json
+
+{
+    "totalCredits": 390
+}
+
+### 5. Eliminar plan de estudio
+DELETE {{baseUrl}}/study-plan/{{planId}}

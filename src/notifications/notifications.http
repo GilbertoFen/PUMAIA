@@ -1,0 +1,17 @@
+@baseUrl = http://localhost:3001/api
+@authToken = Bearer eyJhbGciOi...
+
+### Consultar Preferencias de Notificación
+GET {{baseUrl}}/notifications/preferences
+Authorization: {{authToken}}
+
+### Actualizar Preferencias de Notificación
+PATCH {{baseUrl}}/notifications/preferences
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "emailEnabled": true,
+  "classReminders": false
+}
+

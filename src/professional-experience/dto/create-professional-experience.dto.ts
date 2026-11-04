@@ -1,9 +1,9 @@
-import { IsUUID, IsNotEmpty, IsString } from 'class-validator';
+import { IsUUID, IsNotEmpty, IsString, IsOptional } from 'class-validator';
 
 export class CreateProfessionalExperienceDto {
+  @IsOptional()
   @IsUUID()
-  @IsNotEmpty()
-  studentId!: string;
+  studentId?: string;
 
   @IsUUID()
   @IsNotEmpty()

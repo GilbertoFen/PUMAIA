@@ -1,0 +1,44 @@
+@baseUrl = http://localhost:3001/api
+@authToken = Bearer eyJhbGciOi...
+
+### Crear Grupo (Admin)
+POST {{baseUrl}}/sections
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "subjectId": "SUBJECT_UUID_HERE",
+  "periodId": "PERIOD_UUID_HERE",
+  "groupCode": "1301",
+  "capacity": 40
+}
+
+### Listar Grupos
+GET {{baseUrl}}/sections
+Authorization: {{authToken}}
+
+### Consultar Mis Grupos (Alumno autenticado)
+GET {{baseUrl}}/sections/my-sections
+Authorization: {{authToken}}
+
+### Agregar Horario a Grupo (Admin / Profesor)
+POST {{baseUrl}}/sections/SECTION_UUID_HERE/meetings
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "weekday": 1,
+  "startTime": "07:00",
+  "endTime": "09:00",
+  "room": "A-101"
+}
+
+### Unirse a un Grupo con Código (Alumno autenticado)
+POST {{baseUrl}}/sections/join
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "joinCode": "JOIN_CODE_HERE"
+}
+

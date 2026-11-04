@@ -1,65 +1,46 @@
-import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { StudyPlanService } from './studyPlan.service';
-//Dto's
 import { CreateStudyPlanDto } from './dto/createStudyPlan.dto';
 import { UpdateStudyPlanDto } from './dto/updateStudyPlan.dto';
+import { JwtAuthGuard } from '../autenticacion/guards/jwt-auth.guard';
+import { RolesGuard } from '../autenticacion/guards/roles.guard';
+import { Roles } from '../autenticacion/decorators/roles.decorator';
+import { RoleType } from '@prisma/client';
 
 @Controller('study-plan')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class StudyPlanController {
-    
     constructor(private readonly studyPlanService: StudyPlanService) {}
 
-    //GET
+    // GET
     @Get('')
-    async getAllStudyPlans(){
-        try{
-            return await this.studyPlanService.getAllStudyPlans()
-        }catch(error){
-            console.error('ERROR EN GET ALL STUDY PLANS:', error);
-            throw error;
-        }
+    async getAllStudyPlans() {
+        return this.studyPlanService.getAllStudyPlans();
     }
 
     @Get(':id')
-    async getStudyPlanById(@Param('id') id: string){
-        try{
-            return await this.studyPlanService.getStudyPlanById(id)
-        }catch(error){
-            console.error('ERROR EN GET STUDY PLAN BY ID:', error);
-            throw error;
-        }
+    async getStudyPlanById(@Param('id') id: string) {
+        return this.studyPlanService.getStudyPlanById(id);
     }
 
-    //POST
+    // POST (Administrador)
     @Post('')
-    async createStudyPlan(@Body() dto: CreateStudyPlanDto){
-        try{
-            return await this.studyPlanService.createStudyPlan(dto)
-        }catch(error){
-            console.error('ERROR EN POST STUDY PLAN:', error);
-            throw error;
-        }
+    @Roles(RoleType.INSTITUTION_ADMIN)
+    async createStudyPlan(@Body() dto: CreateStudyPlanDto) {
+        return this.studyPlanService.createStudyPlan(dto);
     }
 
-    //Put
+    // PUT (Administrador)
     @Put(':id')
-    async updateStudyPlan(@Body() dto: UpdateStudyPlanDto, @Param('id') id: string){
-        try{
-            return await this.studyPlanService.updateStudyPlan(id, dto)
-        }catch(error){
-            console.error('ERROR EN UPDATE STUDY PLAN:', error);
-            throw error;
-        }
+    @Roles(RoleType.INSTITUTION_ADMIN)
+    async updateStudyPlan(@Body() dto: UpdateStudyPlanDto, @Param('id') id: string) {
+        return this.studyPlanService.updateStudyPlan(id, dto);
     }
 
-    //DELETE
+    // DELETE (Administrador)
     @Delete(':id')
-    async deleteStudyPlan(@Param('id') id: string){
-        try{
-            return await this.studyPlanService.deleteStudyPlan(id)
-        }catch(error){
-            console.error('ERROR EN DELETE STUDY PLAN:', error);
-            throw error;
-        }
+    @Roles(RoleType.INSTITUTION_ADMIN)
+    async deleteStudyPlan(@Param('id') id: string) {
+        return this.studyPlanService.deleteStudyPlan(id);
     }
 }

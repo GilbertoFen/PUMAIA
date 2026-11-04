@@ -1,83 +1,94 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
-//GILBERTO
-//import { AcademicModule } from './academic/academic.module';
-//import { WorkModule } from './work/work.module';
-//import { ExtrasModule } from './extras/extras.module';
-//import { LanguagesModule } from './languages/languages.module';
-import { StudentsModule } from './students/students.module';
+// INFRAESTRUCTURA Y TRANSVERSALES
 import { PrismaModule } from './prisma/prisma.module';
-import { ContestModule } from './contest/contest.module';
-import { AreasExpertiseController } from './area-expertise/area-expertise.controller';
-import { AreasExpertiseService } from './area-expertise/area-expertise.service';
-import { AreaExpertiseModule } from './area-expertise/area-expertise.module';
-import { ProfessionalExperienceModule } from './professional-experience/professional-experience.module';
-import { AIResultModule } from './ai-result/ai-result.module';
-import { AICategoryModule } from './ai-category/ai-category.module';
+import { AuditModule } from './audit/audit.module';
+import { ConsentsModule } from './consents/consents.module';
+import { AutenticacionModule } from './autenticacion/autenticacion.module';
 
-//SAUL
-import { KnowledgeAreaModule } from './knowledgeArea/knowledgeArea.module';
-import { StudyPlanModule } from './studyPlan/studyPlan.module';
-import { CategoryModule } from './category/category.module';
-import { SubjectModule } from './subject/subject.module';
-import { GradeModule } from './grades/grade.module';
+// ALUMNOS Y EXPEDIENTE
+import { StudentsModule } from './students/students.module';
 import { CareerModule } from './career/career.module';
 import { StudentCareerModule } from './students-career/studentCareer.module';
+import { SubjectModule } from './subject/subject.module';
+import { GradeModule } from './grades/grade.module';
+import { StudyPlanModule } from './studyPlan/studyPlan.module';
+import { CategoryModule } from './category/category.module';
+import { KnowledgeAreaModule } from './knowledgeArea/knowledgeArea.module';
 
-//RACIEL
-//import { AppController } from './app.controller';
-//import { AppService } from './app.service';
-import { AdressesModule } from './adresses/adresses.module';
-import { LanguagesModule } from './languages/languages.module';
-import { AutenticacionModule } from './autenticacion/autenticacion.module';
-import { SkillsModule } from './skills/skills.module';
-import { CertificationsModule } from './certifications/certifications.module';
-import { SchoolarshipsModule } from './schoolarships/schoolarships.module';
+// ACTIVIDADES, CURSOS Y PERFIL
 import { CoursesModule } from './courses/courses.module';
-import { QuestionnaireController } from './questionnaire/questionnaire.controller';
-import { QuestionnaireService } from './questionnaire/questionnaire.service';
-import { QuestionnaireModule } from './questionnaire/questionnaire.module';
+import { CertificationsModule } from './certifications/certifications.module';
+import { LanguagesModule } from './languages/languages.module';
+import { SkillsModule } from './skills/skills.module';
+import { SchoolarshipsModule } from './schoolarships/schoolarships.module';
+import { ContestModule } from './contest/contest.module';
+import { AreaExpertiseModule } from './area-expertise/area-expertise.module';
+import { ProfessionalExperienceModule } from './professional-experience/professional-experience.module';
+import { AdressesModule } from './adresses/adresses.module';
+
+// ASISTENTE DE IA Y CUESTIONARIOS
 import { ChatModule } from './chat/chat.module';
+import { AIResultModule } from './ai-result/ai-result.module';
+import { AICategoryModule } from './ai-category/ai-category.module';
+import { QuestionnaireModule } from './questionnaire/questionnaire.module';
+
+// GESTIÓN ACADÉMICA, ASISTENCIA Y CONOCIMIENTO RAG
+import { SectionsModule } from './sections/sections.module';
+import { AttendanceModule } from './attendance/attendance.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { KnowledgeDocumentsModule } from './knowledge-documents/knowledge-documents.module';
+
+// VISTAS Y MÉTRICAS INSTITUCIONALES (DASHBOARD)
+import { MetricsModule } from './metrics/metrics.module';
+
+// CUERPO DOCENTE, PERFIL PERSONAL Y SALUD OPERATIVA
+import { ProfessorsModule } from './professors/professors.module';
+import { PersonalProfileModule } from './personal-profile/personal-profile.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    StudentsModule,
-    AdressesModule,
-    //AcademicModule,
-    //WorkModule,
-    //ExtrasModule,
-    LanguagesModule,
-    StudentsModule,
     PrismaModule,
+    AuditModule,
+    ConsentsModule,
+    AutenticacionModule,
+
+    StudentsModule,
+    CareerModule,
+    StudentCareerModule,
+    SubjectModule,
+    GradeModule,
+    StudyPlanModule,
+    CategoryModule,
+    KnowledgeAreaModule,
+
+    CoursesModule,
+    CertificationsModule,
+    LanguagesModule,
+    SkillsModule,
+    SchoolarshipsModule,
     ContestModule,
     AreaExpertiseModule,
     ProfessionalExperienceModule,
+    AdressesModule,
+
+    ChatModule,
     AIResultModule,
     AICategoryModule,
+    QuestionnaireModule,
 
-    KnowledgeAreaModule,
-    StudyPlanModule,
-    CategoryModule,
-    SubjectModule,
-    GradeModule,
-    CareerModule,
-    StudentCareerModule,
- 
-    AdressesModule, 
-    LanguagesModule, 
-    AutenticacionModule, 
-    SkillsModule, 
-    CertificationsModule, 
-    SchoolarshipsModule, 
-    CoursesModule, QuestionnaireModule, ChatModule
-  ],
-  controllers: [AreasExpertiseController, QuestionnaireController, //AppController
-  ],
-  providers: [AreasExpertiseService, QuestionnaireService, //AppService
+    SectionsModule,
+    AttendanceModule,
+    NotificationsModule,
+    KnowledgeDocumentsModule,
+    MetricsModule,
 
+    ProfessorsModule,
+    PersonalProfileModule,
+    HealthModule,
   ],
-
 })
 export class AppModule {}

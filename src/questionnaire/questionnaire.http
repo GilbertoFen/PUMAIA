@@ -1,21 +1,79 @@
-POST http://localhost:3001/api/questionnaire/save
+@baseUrl = http://localhost:3001/api
+@authToken = Bearer eyJhbGciOi...
+
+### Obtener Cuestionario Activo (Onboarding)
+GET {{baseUrl}}/questionnaire/active?kind=ONBOARDING
+Authorization: {{authToken}}
+
+### Guardar Respuestas del Cuestionario (Alumno autenticado)
+POST {{baseUrl}}/questionnaire/save
+Authorization: {{authToken}}
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2YzhjNzcwYi0yMjM5LTQ5MjgtOWM3Zi1kMzcxNDNiMjBhYTUiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc5MDA0MzczLCJleHAiOjE3NzkwMTE1NzN9.V93ugUPVdqk7hRNznA73h5No_98_GeNk2VwZzmA-fp8
 
 {
   "answers": [
     {
-      "id": "p1_intereses",
+      "id": "p1_interes_area",
       "category": "INTERESES",
-      "value": ["Desarrollo Web", "Inteligencia Artificial"]
+      "value": "Desarrollo de Software e Inteligencia Artificial"
     },
     {
-      "id": "p2_proyectos",
-      "category": "EXPERIENCIA",
-      "value": {
-        "_list": ["E-commerce con React", "Bot de Telegram"],
-        "exp": "2 años como freelance"
-      }
+      "id": "p2_modalidad_trabajo",
+      "category": "EXPECTATIVAS",
+      "value": "Remoto"
+    },
+    {
+      "id": "p3_nivel_programacion",
+      "category": "HABILIDADES",
+      "value": 4
     }
   ]
+}
+
+### Consultar Respuestas del Alumno Autenticado
+GET {{baseUrl}}/questionnaire/my-answers
+Authorization: {{authToken}}
+
+### Consultar Historial de Envíos del Alumno
+GET {{baseUrl}}/questionnaire/my-responses
+Authorization: {{authToken}}
+
+### Listar Catálogo de Cuestionarios (Admin / Analyst)
+GET {{baseUrl}}/questionnaire/catalog
+Authorization: {{authToken}}
+
+### Crear Nuevo Cuestionario (Admin)
+POST {{baseUrl}}/questionnaire
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "kind": "CHECK_IN",
+  "version": 1,
+  "active": true
+}
+
+### Agregar Pregunta a Cuestionario (Admin)
+POST {{baseUrl}}/questionnaire/QUESTIONNAIRE_UUID_HERE/questions
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "code": "p_satisfaccion_general",
+  "position": 1,
+  "text": "¿Cómo calificarías tu satisfacción general con el semestre?",
+  "type": "SCALE",
+  "required": true,
+  "category": "EXPECTATIVAS"
+}
+
+### Agregar Opción a Pregunta (Admin)
+POST {{baseUrl}}/questionnaire/questions/QUESTION_UUID_HERE/options
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "value": "5",
+  "label": "Muy Satisfecho",
+  "position": 1
 }

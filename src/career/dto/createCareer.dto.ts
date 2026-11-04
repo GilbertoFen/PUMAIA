@@ -1,16 +1,34 @@
-import { IsBoolean, IsString } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
-export class CreateCareerDto{
+export class CreateCareerDto {
   @IsString()
-  name: string
-
-  @IsString()
-  studyPlanID: string
+  @IsNotEmpty({ message: 'El nombre de la carrera es obligatorio' })
+  name: string;
 
   @IsString()
-  knowledgeAreaID: string
+  @IsNotEmpty({ message: 'La clave de carrera UNAM es obligatoria (ej. 121)' })
+  code: string;
+
+  @IsString()
+  @IsOptional()
+  institutionId?: string;
+
+  @IsString()
+  @IsOptional()
+  studyPlanID?: string;
+
+  @IsString()
+  @IsOptional()
+  studyPlanId?: string;
+
+  @IsString()
+  @IsOptional()
+  knowledgeAreaID?: string;
+
+  @IsString()
+  @IsOptional()
+  knowledgeAreaId?: string;
 
   @IsBoolean()
-  isMasters: boolean
-
+  isMasters: boolean;
 }

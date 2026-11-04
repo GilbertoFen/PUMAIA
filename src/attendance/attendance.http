@@ -1,0 +1,40 @@
+@baseUrl = http://localhost:3001/api
+@authToken = Bearer eyJhbGciOi...
+
+### Abrir Sesión de Clase (Profesor / Admin)
+POST {{baseUrl}}/attendance/sessions
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "sectionId": "SECTION_UUID_HERE"
+}
+
+### Registrar Asistencia con Secreto QR (Alumno autenticado)
+POST {{baseUrl}}/attendance/record
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "sessionId": "SESSION_UUID_HERE",
+  "secret": "A1B2C3D4"
+}
+
+### Cerrar Sesión de Clase y Computar Faltas (Profesor / Admin)
+POST {{baseUrl}}/attendance/sessions/SESSION_UUID_HERE/close
+Authorization: {{authToken}}
+
+### Corrección Manual de Asistencia (Profesor / Admin)
+PATCH {{baseUrl}}/attendance/records/RECORD_UUID_HERE
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "status": "EXCUSED",
+  "reason": "Justificante médico presentado"
+}
+
+### Consultar Historial de Asistencia del Alumno
+GET {{baseUrl}}/attendance/my-attendance
+Authorization: {{authToken}}
+

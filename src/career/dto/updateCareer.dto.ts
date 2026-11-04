@@ -1,20 +1,4 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { PartialType } from '@nestjs/mapped-types';
+import { CreateCareerDto } from './createCareer.dto';
 
-export class UpdateCareerDto{
-  @IsString()
-  @IsOptional()
-  name?: string
-  
-  @IsString()
-  @IsOptional()
-  studyPlanID?: string
-  
-  @IsString()
-  @IsOptional()
-  knowledgeAreaID?: string
-  
-  @IsBoolean()
-  @IsOptional()
-  isMasters?: boolean
-
-}
+export class UpdateCareerDto extends PartialType(CreateCareerDto) {}

@@ -1,4 +1,7 @@
+import { IsOptional, IsString } from 'class-validator';
+
 export class UpdateCourseUserDto {
-    courseId?: string;
-    userId?: string;
+  @IsOptional()
+  @IsString()
+  courseId?: string;
 }

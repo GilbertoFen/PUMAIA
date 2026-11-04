@@ -1,17 +1,29 @@
-POST http://localhost:3001/api/languages
+@baseUrl = http://localhost:3001/api
+@authToken = Bearer eyJhbGciOi...
+
+### Crear Idioma en Catálogo (Admin)
+POST {{baseUrl}}/languages
+Authorization: {{authToken}}
 Content-Type: application/json
 
 {
-    "name":"Ingles"
+  "name": "Alemán"
 }
 
+### Listar Idiomas en Catálogo
+GET {{baseUrl}}/languages
+Authorization: {{authToken}}
 
-###
-POST http://localhost:3001/api/languages/languageUsers
+### Asignar Idioma y Nivel al Alumno (Alumno autenticado)
+POST {{baseUrl}}/languages/languageUsers
+Authorization: {{authToken}}
 Content-Type: application/json
 
 {
-    "studentId":"d2ee86f2-8174-4f57-a9b9-db6c70db8342",
-    "languageId":"e1025b3d-bd1a-44bc-b1ff-cd43c0702e83",
-    "skillId":"269a0a23-637d-4aec-82e4-75a7c4725eca"
+  "languageId": "LANGUAGE_UUID_HERE",
+  "skillId": "SKILL_UUID_HERE"
 }
+
+### Eliminar Idioma de un Alumno (Alumno propietario)
+DELETE {{baseUrl}}/languages/languageUsers/RELATION_UUID_HERE
+Authorization: {{authToken}}

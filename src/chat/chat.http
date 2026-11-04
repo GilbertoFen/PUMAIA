@@ -1,20 +1,75 @@
-POST http://localhost:3001/api/chat/message
+### Variables
+@baseUrl = http://localhost:3001/api
+@authToken = {{login.response.body.accessToken}}
+
+### 1. Listar conversaciones del estudiante
+GET {{baseUrl}}/chat/conversations
+Authorization: Bearer {{authToken}}
+
+### 2. Obtener mensajes de una conversación específica
+GET {{baseUrl}}/chat/conversations/{{convId}}/messages
+Authorization: Bearer {{authToken}}
+
+### 3. Enviar mensaje a PumaIA (GenAI)
+POST {{baseUrl}}/chat/message
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI3NTMwYWUwYS03MmJkLTQwMDUtYmY2NC02MWUxZjZiNjQ5MDkiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc5Njc5MzU1LCJleHAiOjE3Nzk2ODY1NTV9.RJGqqfqlVlsGSwo0e-N6tSZZIN_NdSEwp8ckdMFrMSQ
+Authorization: Bearer {{authToken}}
 
 {
-  "content": "Hola, ¿sabes cómo me llamo y en qué semestre voy?"
+  "content": "¿Cuáles son los requisitos para titularme en Matemáticas Aplicadas y Computación?",
+  "conversationId": "{{convId}}"
 }
 
-###
-PATCH http://localhost:3001/api/chat/conversations/0753398e-2ece-4a6b-a221-4b0eab791f1a
+### 4. Enviar mensaje a PumaIA mediante RAG Webhook (n8n / pgvector)
+POST {{baseUrl}}/chat/message/n8n
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjODIzNjA2OS02YzA5LTRmMDItYTE1OC0xMjM4NDJkNjA1YjgiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4Nzg5NTM2LCJleHAiOjE3Nzg3OTY3MzZ9.7-0vno50QyM8fDYQgPYHXA3oLumNjvJ4caloPNFMmnU
+Authorization: Bearer {{authToken}}
 
 {
-    "title": "Implementacion real de un modelo"
+  "content": "¿Dónde puedo consultar las fechas de inscripción para el semestre 2026-1?",
+  "conversationId": "{{convId}}"
 }
 
-###
-GET http://localhost:3001/api/chat/conversations
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjODIzNjA2OS02YzA5LTRmMDItYTE1OC0xMjM4NDJkNjA1YjgiLCJuYW1lIjoiTFVJUyBHSUxCRVJUTyIsImFjY291bnROdW1iZXIiOjEwMDAwMywiaWF0IjoxNzc4Nzg5NTM2LCJleHAiOjE3Nzg3OTY3MzZ9.7-0vno50QyM8fDYQgPYHXA3oLumNjvJ4caloPNFMmnU
+### 5. Actualizar título de conversación
+PATCH {{baseUrl}}/chat/conversations/{{convId}}
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "title": "Trámites de titulación y servicio social"
+}
+
+### 6. Eliminar conversación
+DELETE {{baseUrl}}/chat/conversations/{{convId}}
+Authorization: Bearer {{authToken}}
+
+### 7. Retroalimentar mensaje (UP / DOWN)
+POST {{baseUrl}}/chat/messages/{{messageId}}/feedback
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "value": "UP",
+  "comment": "Respuesta clara y precisa."
+}
+
+### 8. Consultar mis resúmenes psicológicos (Borradores / Aprobados)
+GET {{baseUrl}}/chat/psychological-summaries
+Authorization: Bearer {{authToken}}
+
+### 9. Aprobar resumen psicológico (Estudiante aprueba borrador)
+POST {{baseUrl}}/chat/psychological-summaries/{{summaryId}}/approve
+Authorization: Bearer {{authToken}}
+
+### 10. Compartir resumen psicológico con psicólogo autorizado
+POST {{baseUrl}}/chat/psychological-summaries/{{summaryId}}/share
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "recipientId": "uuid-del-psicologo"
+}
+
+### 11. Revocar acceso a resumen psicológico
+POST {{baseUrl}}/chat/psychological-summaries/{{summaryId}}/revoke
+Authorization: Bearer {{authToken}}

@@ -1,186 +1,368 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { CreateStudentDto } from './dto/create-student.dto';
-import * as bcrypt from 'bcrypt';
-import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
-import { ConflictException } from '@nestjs/common';
+import { UserStatus, RoleType } from '@prisma/client';
+
 @Injectable()
 export class StudentsService {
-    constructor(private prisma: PrismaService, private cloudinary: CloudinaryService) { }
+  private readonly logger = new Logger(StudentsService.name);
 
-    async findAll() {
-        try {
-            console.log('1. Buscando todos los estudiantes...');
-            const result = await this.prisma.student.findMany();
-            console.log('2. Estudiantes encontrados:', result);
-            return result;
-        } catch (error) {
-            console.error('ERROR EN PRISMA:', error);
-            throw error;
-        }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cloudinary: CloudinaryService,
+  ) {}
+
+  /**
+   * Obtiene todos los alumnos con sus datos de usuario y carrera.
+   */
+  async findAll() {
+    return this.prisma.student.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            lastNameP: true,
+            lastNameM: true,
+            email: true,
+            avatarUrl: true,
+            status: true,
+          },
+        },
+        career: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Obtiene un alumno por su ID de Student.
+   */
+  async findById(studentId: string) {
+    const student = await this.prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            lastNameP: true,
+            lastNameM: true,
+            email: true,
+            avatarUrl: true,
+            status: true,
+          },
+        },
+        career: true,
+      },
+    });
+
+    if (!student) {
+      throw new NotFoundException(`Alumno con ID ${studentId} no encontrado.`);
     }
 
-    async create(dto: CreateStudentDto) {
-        // 1. Validar que no exista la cuenta o el correo
-        const existingStudent = await this.prisma.student.findFirst({
-            where: {
-                OR: [
-                    { accountNumber: dto.accountNumber },
-                    { email: dto.email }
-                ]
-            }
-        });
+    return student;
+  }
 
-        if (existingStudent) {
-            throw new ConflictException('El número de cuenta o correo ya están registrados.');
-        }
+  /**
+   * Busca un alumno por su número de cuenta.
+   */
+  async findByAccountNumber(accountNumber: number) {
+    return this.prisma.student.findUnique({
+      where: { accountNumber },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            lastNameP: true,
+            lastNameM: true,
+            email: true,
+            avatarUrl: true,
+          },
+        },
+        career: true,
+      },
+    });
+  }
 
-        const salt = await bcrypt.genSalt();
-        const hashedPassword = await bcrypt.hash(dto.password, salt);
+  /**
+   * Busca un alumno por el correo del usuario asociado.
+   */
+  async findByEmail(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+      include: {
+        student: {
+          include: {
+            career: true,
+          },
+        },
+      },
+    });
 
-        // 2. Crear al estudiante. 
-        // Asumiendo que tu modelo Prisma relaciona Student con Career mediante una tabla pivote 'StudentCareer'
-        // Si tu relación es directa, simplemente añade el careerId o el string.
-        return this.prisma.student.create({
-            data: {
-                accountNumber: dto.accountNumber,
-                name: dto.name,
-                lastNameP: dto.lastNameP,
-                lastNameM: dto.lastNameM,
-                interest: dto.interest,
-                currentSemester: dto.currentSemester,
-                average: dto.average,
-                email: dto.email,
-                password: hashedPassword,
-                addressId: dto.addressId,
+    return user?.student || null;
+  }
 
-                // 🔥 Inyectamos MAC por defecto. 
-                // Asegúrate de que el id 'MAC_UUID' sea el ID real de MAC en tu tabla Career.
-                // Si guardas la carrera como un simple String en Student, sería: career: "Matemáticas Aplicadas y Computación"
-                // ... los otros campos
-                careers: {
-                    create: {
-                        isGraduated: false, // <-- LÍNEA FALTANTE (Agrega esto)
-                        career: {
-                            connect: { id: "e1acac76-ad66-458f-b148-906ccec35538" }
-                        }
-                    }
-                }
-            }
-        });
-    }
-    async findByAccountNumber(accountNumber: number) {
-        const result = await this.prisma.student.findUnique({
-            where: { accountNumber },
-            include: {
-                careers: {
-                    include: {
-                        career: true
-                    }
-                }
-            }
-        });
-        console.log('Resultado de Prisma:', JSON.stringify(result, null, 2));
-        return result;
+  /**
+   * Creación administrativa controlada de un alumno.
+   */
+  async create(dto: CreateStudentDto) {
+    const cleanEmail = dto.email.toLowerCase().trim();
+
+    // 1. Validar que no exista el número de cuenta ni el correo
+    const existingStudent = await this.prisma.student.findUnique({
+      where: { accountNumber: dto.accountNumber },
+    });
+
+    if (existingStudent) {
+      throw new ConflictException(`El número de cuenta ${dto.accountNumber} ya está registrado.`);
     }
 
-    async findByEmail(email: string) {
-        return await this.prisma.student.findUnique({
-            where: { email }
-        });
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: cleanEmail },
+    });
+
+    if (existingUser) {
+      throw new ConflictException(`El correo ${cleanEmail} ya está registrado.`);
     }
 
-
-    async assignContest(studentId: string, contestId: string) {
-        try {
-            return await this.prisma.studentContest.create({
-                data: {
-                    studentId: studentId,
-                    contestId: contestId,
-                },
-                include: {
-                    contest: true
-                }
-            });
-        } catch (error) {
-            console.error("Error al asignar concurso:", error);
-            throw error;
-        }
+    // 2. Resolver la carrera
+    let careerId = dto.careerId;
+    if (!careerId) {
+      const defaultCareer = await this.prisma.career.findFirst();
+      if (!defaultCareer) {
+        throw new BadRequestException('No existe ninguna carrera registrada para asociar al estudiante.');
+      }
+      careerId = defaultCareer.id;
     }
-    // En tu student.service.ts (o el servicio que maneje el perfil del alumno)
-    async updateInterests(studentId: string, interest: string) {
-        return await this.prisma.student.update({
-            where: {
-                id: studentId
+
+    // 3. Resolver la institución
+    const defaultInst = await this.prisma.institution.findFirst({
+      where: { code: '240' },
+    }) || await this.prisma.institution.findFirst();
+
+    if (!defaultInst) {
+      throw new BadRequestException('No existe ninguna institución registrada para asociar al estudiante.');
+    }
+
+    // 4. Crear User y Student en una transacción
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          institutionId: defaultInst.id,
+          email: cleanEmail,
+          name: dto.name,
+          lastNameP: dto.lastNameP,
+          lastNameM: dto.lastNameM || null,
+          status: UserStatus.ACTIVE,
+          roles: {
+            create: { role: RoleType.STUDENT },
+          },
+        },
+      });
+
+      const student = await tx.student.create({
+        data: {
+          userId: user.id,
+          accountNumber: dto.accountNumber,
+          careerId,
+          interest: dto.interest || null,
+          currentSemester: dto.currentSemester || 1,
+          average: dto.average ? Number(dto.average) : null,
+          addressId: dto.addressId || null,
+          isGraduated: false,
+          hasCompletedQuiz: false,
+        },
+        include: {
+          user: true,
+          career: true,
+        },
+      });
+
+      return student;
+    });
+  }
+
+  /**
+   * Asigna un concurso al alumno.
+   */
+  async assignContest(studentId: string, contestId: string) {
+    const contest = await this.prisma.contest.findUnique({ where: { id: contestId } });
+    if (!contest) throw new NotFoundException('Concurso no encontrado.');
+
+    return this.prisma.studentContest.create({
+      data: {
+        studentId,
+        contestId,
+      },
+      include: { contest: true },
+    });
+  }
+
+  /**
+   * Elimina un concurso asignado.
+   */
+  async removeContest(relationId: string) {
+    return this.prisma.studentContest.delete({
+      where: { id: relationId },
+    });
+  }
+
+  /**
+   * Actualiza los intereses declarados por el alumno.
+   */
+  async updateInterests(studentId: string, interest: string) {
+    return this.prisma.student.update({
+      where: { id: studentId },
+      data: {
+        interest: interest.trim(),
+      },
+      select: {
+        id: true,
+        interest: true,
+      },
+    });
+  }
+
+  /**
+   * Genera el expediente completo del alumno adaptado al esquema Prisma v3:
+   * - Une datos de User (nombre, apellidos, correo, avatar).
+   * - Mapea enrollments a formato de materias/calificaciones para compatibilidad.
+   * - Mapea responses y answers para retrocompatibilidad con el perfil.
+   */
+  async getFullProfileSummary(studentId: string) {
+    const profile = await this.prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            lastNameP: true,
+            lastNameM: true,
+            email: true,
+            avatarUrl: true,
+          },
+        },
+        career: true,
+        courses: { include: { course: true } },
+        languages: { include: { language: true, skill: true } },
+        schoolarships: { include: { schoolarship: true } },
+        contests: { include: { contest: true } },
+        experiences: { include: { areaExpertise: true, category: true } },
+        enrollments: {
+          include: {
+            subject: true,
+            period: true,
+          },
+        },
+        responses: {
+          include: {
+            answers: {
+              include: {
+                question: true,
+                option: true,
+              },
             },
-            data: {
-                interest: interest.trim(), // Insertamos el string crudo tal cual llegó
-            },
-            select: {
-                id: true,
-                interest: true
-            }
-        });
-    }
-    async getFullProfileSummary(studentId: string) {
-        // 1. Traemos el perfil completo incluyendo la relación "grades"
-        const profile = await this.prisma.student.findUnique({
-            where: { id: studentId },
-            include: {
-                courses: { include: { course: true } },
-                languages: { include: { language: true, skill: true } },
-                schoolarships: { include: { schoolarship: true } },
-                contests: { include: { contest: true } },
-                experiences: { include: { areaExpertise: true } },
-                answers: true,
-                
-                // 🔥 AQUÍ ESTÁ LA CLAVE: Incluimos tus calificaciones y la materia
-                grades: { include: { subject: true } } 
-            }
-        });
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 1, // El envío más reciente
+        },
+      },
+    });
 
-        if (!profile) return null;
+    if (!profile) return null;
 
-        // 2. Calculamos el promedio dinámico iterando sobre 'grades'
-        let dynamicAverage = 0;
-        
-        if (profile.grades && profile.grades.length > 0) {
-            const sum = profile.grades.reduce((acc, currentGrade) => {
-                // Sumamos el valor de la columna 'grade' de tu modelo 'Grades'
-                return acc + Number(currentGrade.grade || 0); 
-            }, 0);
-            
-            dynamicAverage = sum / profile.grades.length;
-        }
+    // Calcular promedio dinámico a partir de inscripciones con calificación
+    const validGrades = profile.enrollments.filter((e) => e.grade !== null && e.grade !== undefined);
+    let dynamicAverage = 0;
 
-        // 3. Sobrescribimos el promedio estático y devolvemos
-        return {
-            ...profile,
-            average: parseFloat(dynamicAverage.toFixed(2)) // Redondeamos a 2 decimales
-        };
-    }
-    async uploadAvatar(studentId: string, file: Express.Multer.File) {
-        if (!file) throw new Error('No se recibió ninguna imagen.');
-
-        // 1. Subimos la imagen a la nube
-        const result = await this.cloudinary.uploadImage(file);
-
-        // 2. Guardamos la URL segura en la base de datos
-        return this.prisma.student.update({
-            where: { id: studentId },
-            data: { avatarUrl: result.secure_url },
-            select: { id: true, avatarUrl: true }
-        });
-    }
-    async removeContest(relationId: string) {
-        try {
-            return await this.prisma.studentContest.delete({
-                where: { id: relationId }
-            });
-        } catch (error) {
-            console.error("Error al eliminar relación concurso-alumno:", error);
-            throw error;
-        }
+    if (validGrades.length > 0) {
+      const sum = validGrades.reduce((acc, curr) => acc + (curr.grade || 0), 0);
+      dynamicAverage = parseFloat((sum / validGrades.length).toFixed(2));
+    } else if (profile.average) {
+      dynamicAverage = Number(profile.average);
     }
 
+    // Adaptador de compatibilidad: expone las materias como grades y respuestas como answers
+    // para no romper consumidores dependientes (IA, frontend histórico)
+    const formattedGrades = profile.enrollments.map((e) => ({
+      id: e.id,
+      studentId: e.studentId,
+      subjectId: e.subjectId,
+      grade: e.grade,
+      status: e.status,
+      attempt: e.attempt,
+      source: e.source,
+      subject: e.subject,
+    }));
+
+    const formattedAnswers =
+      profile.responses?.[0]?.answers?.map((ans) => ({
+        id: ans.id,
+        questionId: ans.question.code,
+        category: ans.question.category,
+        answer: ans.option?.label || ans.textValue || ans.numberValue || '',
+      })) || [];
+
+    const fullName = `${profile.user.name} ${profile.user.lastNameP} ${profile.user.lastNameM || ''}`.trim();
+
+    return {
+      ...profile,
+      // Propiedades de identidad provistas desde User
+      name: profile.user.name,
+      lastNameP: profile.user.lastNameP,
+      lastNameM: profile.user.lastNameM,
+      fullName,
+      email: profile.user.email,
+      avatarUrl: profile.user.avatarUrl,
+      average: dynamicAverage,
+      career: profile.career?.name || '',
+      accountNumberFormatted: String(profile.accountNumber).padStart(9, '0'),
+      // Adaptadores retrocompatibles
+      grades: formattedGrades,
+      answers: formattedAnswers,
+    };
+  }
+
+  /**
+   * Sube avatar a Cloudinary y actualiza User.avatarUrl.
+   */
+  async uploadAvatar(studentId: string, file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('No se recibió ninguna imagen.');
+
+    const student = await this.prisma.student.findUnique({
+      where: { id: studentId },
+      select: { id: true, userId: true },
+    });
+
+    if (!student) {
+      throw new NotFoundException('Alumno no encontrado.');
+    }
+
+    const result = await this.cloudinary.uploadImage(file);
+
+    await this.prisma.user.update({
+      where: { id: student.userId },
+      data: { avatarUrl: result.secure_url },
+    });
+
+    return {
+      studentId,
+      avatarUrl: result.secure_url,
+    };
+  }
 }

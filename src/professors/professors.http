@@ -1,0 +1,43 @@
+@baseUrl = http://localhost:3001/api
+@authToken = Bearer eyJhbGciOi...
+
+### Listar Profesores
+GET {{baseUrl}}/professors
+Authorization: {{authToken}}
+
+### Crear Profesor (Admin)
+POST {{baseUrl}}/professors
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "name": "Alan",
+  "lastNameP": "Turing",
+  "lastNameM": "Mathison",
+  "startYear": 2018,
+  "cubicle": "Edificio T - Cubículo 104"
+}
+
+### Registrar Grado Académico / Estudio (Admin)
+POST {{baseUrl}}/professors/PROFESSOR_UUID_HERE/studies
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "degree": "Doctorado",
+  "title": "Doctor en Ciencias de la Computación",
+  "institution": "Universidad de Cambridge",
+  "year": 1938
+}
+
+### Registrar Publicación (Admin)
+POST {{baseUrl}}/professors/PROFESSOR_UUID_HERE/publications
+Authorization: {{authToken}}
+Content-Type: application/json
+
+{
+  "title": "On Computable Numbers, with an Application to the Entscheidungsproblem",
+  "year": 1936,
+  "doi": "10.1112/plms/s2-42.1.230"
+}
+

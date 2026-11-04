@@ -3,13 +3,19 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+const resolvedUrl =
+  process.env["PUMAIA_DB_TARGET"] === "local_test"
+    ? process.env["TEST_DIRECT_URL"] ||
+      "postgresql://postgres:postgres@127.0.0.1:5433/pumaia_test?schema=public"
+    : process.env["DIRECT_URL"] || process.env["DATABASE_URL"];
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
-    seed: 'node ./prisma/seed.ts',
+    seed: "node ./prisma/seed.ts",
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DIRECT_URL"],
+    url: resolvedUrl,
   },
 });
