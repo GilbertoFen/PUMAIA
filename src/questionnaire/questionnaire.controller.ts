@@ -39,7 +39,7 @@ export class QuestionnaireController {
     if (!user || !user.studentId) {
       throw new BadRequestException('El usuario no cuenta con un perfil de estudiante vinculado.');
     }
-    return this.questionnaireService.saveAll(user.studentId, dto);
+    return this.questionnaireService.saveAll(user.studentId, dto, { allowOnboardingUpdate: true });
   }
 
   @Get('my-answers')

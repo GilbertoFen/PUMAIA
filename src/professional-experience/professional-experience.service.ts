@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProfessionalExperienceDto } from './dto/create-professional-experience.dto';
+import { CategoryEnum } from '@prisma/client';
 
 @Injectable()
 export class ProfessionalExperienceService {
@@ -111,38 +112,44 @@ export class ProfessionalExperienceService {
       throw new BadRequestException('El texto de la experiencia no puede estar vacío.');
     }
 
-    const fastApiUrl =
-      process.env.FASTAPI_EXPERIENCE_URL ||
-      process.env.FASTAPI_URL ||
-      'https://server-genai.onrender.com/analyze-experience';
-
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const textLower = rawExperienceText.toLowerCase();
 
-      const response = await fetch(fastApiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ experience_text: rawExperienceText.trim() }),
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timeoutId));
+      // Clasificación interna basada en catálogo institucional (sin dependencia externa)
+      let matchedArea = 'Desarrollo de Software';
+      let categoryEnum: CategoryEnum = CategoryEnum.SISTEMAS_COMPUTACIONALES;
 
-      if (!response.ok) {
-        throw new Error(`Servidor de IA devolvió código HTTP ${response.status}`);
+      if (textLower.includes('dato') || textLower.includes('analytics') || textLower.includes('estadístic') || textLower.includes('bi')) {
+        matchedArea = 'Ciencia de Datos y Analítica';
+        categoryEnum = CategoryEnum.PROBABILIDAD_ESTADISTICA_Y_OPTIMIZACION;
+      } else if (textLower.includes('ia') || textLower.includes('inteligencia') || textLower.includes('machine') || textLower.includes('aprendizaje')) {
+        matchedArea = 'Inteligencia Artificial y Machine Learning';
+        categoryEnum = CategoryEnum.CIENCIAS_DE_LA_COMPUTACION;
+      } else if (textLower.includes('seguridad') || textLower.includes('vulnerab') || textLower.includes('ciber') || textLower.includes('audit')) {
+        matchedArea = 'Ciberseguridad y Seguridad de la Información';
+        categoryEnum = CategoryEnum.SISTEMAS_COMPUTACIONALES;
+      } else if (textLower.includes('red') || textLower.includes('cisco') || textLower.includes('telecom') || textLower.includes('router')) {
+        matchedArea = 'Redes e Infraestructura de Comunicaciones';
+        categoryEnum = CategoryEnum.COMPUTACION;
+      } else if (textLower.includes('cloud') || textLower.includes('aws') || textLower.includes('azure') || textLower.includes('devops') || textLower.includes('docker')) {
+        matchedArea = 'Cloud Computing y DevOps';
+        categoryEnum = CategoryEnum.SISTEMAS_COMPUTACIONALES;
+      } else if (textLower.includes('base') || textLower.includes('sql') || textLower.includes('postgres') || textLower.includes('oracle') || textLower.includes('mongo')) {
+        matchedArea = 'Bases de Datos y Modelado de Información';
+        categoryEnum = CategoryEnum.COMPUTACION;
+      } else if (textLower.includes('movil') || textLower.includes('móvil') || textLower.includes('android') || textLower.includes('ios') || textLower.includes('flutter')) {
+        matchedArea = 'Desarrollo Móvil';
+        categoryEnum = CategoryEnum.SISTEMAS_COMPUTACIONALES;
       }
-
-      const aiData = await response.json();
-      const areaName = aiData.areaExpertise || 'Desarrollo de Software';
-      const categoryEnum = aiData.categoryEnum || 'SISTEMAS_COMPUTACIONALES';
 
       // Buscar o crear el área de expertise
       let area = await this.prisma.areaExpertise.findFirst({
-        where: { name: { equals: areaName, mode: 'insensitive' } },
+        where: { name: { equals: matchedArea, mode: 'insensitive' } },
       });
 
       if (!area) {
         area = await this.prisma.areaExpertise.create({
-          data: { name: areaName },
+          data: { name: matchedArea },
         });
       }
 
@@ -164,9 +171,9 @@ export class ProfessionalExperienceService {
         categoryId: category.id,
       });
     } catch (error: any) {
-      this.logger.error(`Error en análisis de experiencia con IA: ${error?.message || error}`);
+      this.logger.error(`Error al registrar experiencia profesional: ${error?.message || error}`);
       throw new InternalServerErrorException(
-        'No se pudo clasificar la experiencia profesional con IA en este momento.',
+        'No se pudo registrar la experiencia profesional en este momento.',
       );
     }
   }

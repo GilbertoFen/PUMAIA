@@ -33,8 +33,22 @@ export class SkillsService {
 
   //GET
 
-  findAll() {
-    return this.prisma.skill.findMany();
+  async findAll() {
+    const skills = await this.prisma.skill.findMany();
+    const descriptions: Record<string, string> = {
+      A1: 'Principiante',
+      A2: 'Elemental',
+      B1: 'Intermedio',
+      B2: 'Intermedio Avanzado',
+      C1: 'Avanzado',
+      C2: 'Maestría Nativa',
+      NATIVO: 'Hablante Nativo',
+    };
+    return skills.map((s) => ({
+      ...s,
+      name: descriptions[s.proficiency] || s.proficiency,
+      label: `${s.proficiency} — ${descriptions[s.proficiency] || s.proficiency}`,
+    }));
   }
 
   findOne(id: string) {

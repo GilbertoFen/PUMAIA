@@ -39,6 +39,7 @@ export class SectionsController {
   }
 
   @Get()
+  @Roles(RoleType.INSTITUTION_ADMIN, RoleType.ANALYST, RoleType.PROFESSOR)
   async findAll(
     @Query('periodId') periodId?: string,
     @Query('subjectId') subjectId?: string,

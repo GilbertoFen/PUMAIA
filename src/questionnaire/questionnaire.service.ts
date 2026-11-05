@@ -131,6 +131,22 @@ export class QuestionnaireService {
       });
     }
 
+    if (
+      kind === QuestionnaireKind.ONBOARDING &&
+      (!questionnaire.questions || questionnaire.questions.length === 0)
+    ) {
+      await this.ensureDefaultOnboardingQuestions(questionnaire.id);
+      questionnaire = (await this.prisma.questionnaire.findUnique({
+        where: { id: questionnaire.id },
+        include: {
+          questions: {
+            orderBy: { position: 'asc' },
+            include: { options: { orderBy: { position: 'asc' } } },
+          },
+        },
+      })) || questionnaire;
+    }
+
     return questionnaire;
   }
 
@@ -359,6 +375,13 @@ export class QuestionnaireService {
             active: true,
           },
         });
+      }
+
+      const questionCount = await tx.question.count({
+        where: { questionnaireId: questionnaire.id },
+      });
+      if (questionCount === 0) {
+        await this.ensureDefaultOnboardingQuestions(questionnaire.id, tx);
       }
 
       // 2. Verificar si ya existe un envío previo para este estudiante y cuestionario
@@ -650,5 +673,139 @@ export class QuestionnaireService {
         },
       },
     });
+  }
+
+  /**
+   * Garantiza la existencia de las preguntas y opciones oficiales de ONBOARDING.
+   */
+  async ensureDefaultOnboardingQuestions(questionnaireId: string, client?: any) {
+    const db = client || this.prisma;
+    const defaultQuestions = [
+      {
+        code: 'tiempo_traslado',
+        text: '¿Cuánto tiempo te toma en promedio trasladarte de tu casa a la FES Acatlán (solo trayecto de ida)?',
+        type: QuestionType.SINGLE_CHOICE,
+        category: 'EXPECTATIVAS',
+        position: 1,
+        options: [
+          'Menos de 45 minutos',
+          'Entre 45 y 90 minutos',
+          'Entre 1.5 y 2.5 horas',
+          'Más de 2.5 horas (Zona foránea / trayecto largo)',
+        ],
+      },
+      {
+        code: 'situacion_laboral',
+        text: '¿Cuál es tu situación laboral actual durante el semestre escolar?',
+        type: QuestionType.SINGLE_CHOICE,
+        category: 'EXPECTATIVAS',
+        position: 2,
+        options: [
+          'Dedicación exclusiva al estudio (No trabajo)',
+          'Trabajo de medio tiempo / becario (< 20 horas por semana)',
+          'Trabajo de tiempo completo (> 35 horas por semana)',
+          'No trabajo actualmente, pero busco empleo activo',
+        ],
+      },
+      {
+        code: 'equipo_computo',
+        text: '¿Cuentas con equipo de cómputo propio y conexión a internet suficiente para programar y hacer proyectos en casa?',
+        type: QuestionType.SINGLE_CHOICE,
+        category: 'EXPECTATIVAS',
+        position: 3,
+        options: [
+          'Sí, cuento con laptop/PC adecuada para programar y compilar',
+          'Cuento con equipo pero es compartido o con rendimiento limitado',
+          'No, dependo enteramente de las salas y laboratorios de cómputo de Acatlán',
+        ],
+      },
+      {
+        code: 'materias_fuertes',
+        text: '¿En cuáles de las siguientes áreas sientes que tienes mayor facilidad, fortaleza o gusto personal?',
+        type: QuestionType.MULTI_CHOICE,
+        category: 'HABILIDADES',
+        position: 4,
+        options: [
+          'Programación, lógica y desarrollo de software',
+          'Matemáticas formales y teóricas (Cálculo, Álgebra, Demostraciones)',
+          'Probabilidad, Estadística y Análisis de Datos',
+          'Optimización, Investigación de Operaciones y Métodos Numéricos',
+          'Ninguna en específico todavía (Aún conociendo la carrera)',
+        ],
+      },
+      {
+        code: 'reaccion_problema',
+        text: 'Cuando repruebas un primer examen parcial o no entiendes un tema clave de una materia, ¿cuál suele ser tu conducta habitual?',
+        type: QuestionType.SINGLE_CHOICE,
+        category: 'INTERESES',
+        position: 5,
+        options: [
+          'Busco asesorías, libros o videos y armo grupos de estudio',
+          'Prefiero estudiar de forma autodidacta hasta resolverlo',
+          'Me genera frustración y tiendo a descuidar la materia o dejar de asistir',
+          'Desatiendo esa materia para salvar las demás y planeo recursarla',
+        ],
+      },
+      {
+        code: 'experiencia_laboral',
+        text: '¿Has programado proyectos personales, participado en hackathones/olimpiadas o realizado cursos técnicos certificados previamente?',
+        type: QuestionType.TEXT,
+        category: 'EXPERIENCIA',
+        position: 6,
+        options: ['Sí', 'No'],
+      },
+      {
+        code: 'ambiente_trabajo',
+        text: '¿Hacia qué sector o ambiente laboral te gustaría enfocar tu carrera al egresar de MAC?',
+        type: QuestionType.SINGLE_CHOICE,
+        category: 'EXPECTATIVAS',
+        position: 7,
+        options: [
+          'Desarrollo de software backend / arquitectura web y móvil',
+          'Ciencia de datos, machine learning o inteligencia artificial',
+          'Sector financiero, riesgos o actuaría (FinTech / Banca)',
+          'Investigación científica, docencia o posgrado formal',
+          'Emprender o crear una startup/empresa de base tecnológica',
+        ],
+      },
+    ];
+
+    for (const q of defaultQuestions) {
+      const existing = await db.question.findUnique({
+        where: {
+          questionnaireId_code: {
+            questionnaireId,
+            code: q.code,
+          },
+        },
+      });
+
+      if (!existing) {
+        const createdQ = await db.question.create({
+          data: {
+            questionnaireId,
+            code: q.code,
+            text: q.text,
+            type: q.type,
+            category: q.category as any,
+            position: q.position,
+            required: true,
+          },
+        });
+
+        if (q.options && q.options.length > 0) {
+          for (let i = 0; i < q.options.length; i++) {
+            await db.questionOption.create({
+              data: {
+                questionId: createdQ.id,
+                position: i + 1,
+                value: q.options[i],
+                label: q.options[i],
+              },
+            });
+          }
+        }
+      }
+    }
   }
 }

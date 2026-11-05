@@ -35,4 +35,10 @@ export class ConfirmGradesDto {
   @ValidateNested({ each: true })
   @Type(() => SubjectGradeItemDto)
   subjects: SubjectGradeItemDto[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(14)
+  currentSemester?: number;
 }

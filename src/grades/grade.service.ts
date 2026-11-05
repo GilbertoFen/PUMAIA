@@ -65,6 +65,11 @@ export class GradeService {
    * Consulta una inscripción específica por ID.
    */
   async getGradeById(id: string) {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!id || !UUID_REGEX.test(id)) {
+      throw new NotFoundException(`Inscripción con ID ${id} no encontrada.`);
+    }
+
     const enrollment = await this.prisma.enrollment.findUnique({
       where: { id },
       include: {
@@ -172,10 +177,23 @@ export class GradeService {
    * Realiza un Upsert sobre Enrollment y actualiza atómicamente el promedio del alumno.
    */
   async saveConfirmedGrades(studentId: string, dto: ConfirmGradesDto) {
-    const validSubjects = dto.subjects.filter((s) => s.subjectID !== null && s.subjectID !== undefined);
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const validSubjects = (dto.subjects || []).filter(
+      (s) =>
+        s &&
+        s.subjectID &&
+        UUID_REGEX.test(s.subjectID) &&
+        typeof s.grade === 'number' &&
+        !isNaN(s.grade) &&
+        s.grade >= 5 &&
+        s.grade <= 10
+    );
 
     if (validSubjects.length === 0) {
-      throw new BadRequestException('No se enviaron materias válidas para registrar.');
+      return {
+        message: 'No se encontraron materias con formato UUID y calificación válida para registrar.',
+        updatedCount: 0,
+      };
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -216,9 +234,17 @@ export class GradeService {
       // Recalcular promedio dinámico atómico del alumno
       await this.recalculateStudentAverage(tx, studentId);
 
+      if (dto.currentSemester && typeof dto.currentSemester === 'number') {
+        await tx.student.update({
+          where: { id: studentId },
+          data: { currentSemester: dto.currentSemester },
+        });
+      }
+
       return {
         message: 'Historial académico registrado y promedio actualizado correctamente.',
         registeredCount: validSubjects.length,
+        currentSemester: dto.currentSemester,
       };
     });
   }

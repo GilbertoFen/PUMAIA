@@ -12,7 +12,7 @@ import { CreatePublicationDto } from './dto/create-publication.dto';
 
 @Injectable()
 export class ProfessorsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   /**
    * Crea un nuevo registro de profesor.

@@ -85,11 +85,14 @@ export class SubjectService {
   }
 
   async analyzeAndMatchHistory(fileBuffer: Buffer) {
-    const markdown = await procesarYValidarHistorial(fileBuffer);
+    const parsed = await procesarYValidarHistorial(fileBuffer);
 
-    if (!markdown) {
+    if (!parsed) {
       throw new BadRequestException('El documento no es un historial válido.');
     }
+
+    const markdown = typeof parsed === 'string' ? parsed : parsed.markdown;
+    const detectedSemester = typeof parsed === 'object' && parsed !== null ? parsed.detectedSemester : null;
 
     const materiasParaMatch: MateriaTemporal[] = [];
     const materiaRegex = /-\s+\*\*(.+?)\*\*:\s+(\d+)/g;
@@ -119,6 +122,7 @@ export class SubjectService {
 
     return {
       rawMarkdown: markdown,
+      detectedSemester,
       subjects: subjectsMatched,
     };
   }
@@ -152,58 +156,83 @@ export class SubjectService {
 
     let newAverage = 0;
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const subject of validSubjects) {
-        const status = subject.grade >= 6 ? EnrollmentStatus.PASSED : EnrollmentStatus.FAILED;
-
-        const existingEnrollment = await tx.enrollment.findFirst({
-          where: {
-            studentId,
-            subjectId: subject.subjectID as string,
-          },
+    await this.prisma.$transaction(
+      async (tx) => {
+        // Consultar todas las inscripciones previas en 1 sola consulta (elimina 30+ roundtrips lentos)
+        const existingEnrollments = await tx.enrollment.findMany({
+          where: { studentId },
+          select: { id: true, subjectId: true },
         });
 
-        if (existingEnrollment) {
-          await tx.enrollment.update({
-            where: { id: existingEnrollment.id },
-            data: {
-              grade: subject.grade,
-              status,
-              source: EnrollmentSource.TRANSCRIPT,
-            },
-          });
-        } else {
-          await tx.enrollment.create({
-            data: {
-              studentId,
-              subjectId: subject.subjectID as string,
-              grade: subject.grade,
-              status,
-              attempt: 1,
-              source: EnrollmentSource.TRANSCRIPT,
-            },
-          });
+        const existingMap = new Map(
+          existingEnrollments.map((e) => [e.subjectId, e.id]),
+        );
+
+        for (const subject of validSubjects) {
+          const status =
+            subject.grade >= 6
+              ? EnrollmentStatus.PASSED
+              : EnrollmentStatus.FAILED;
+          const existingId = existingMap.get(subject.subjectID as string);
+
+          if (existingId) {
+            await tx.enrollment.update({
+              where: { id: existingId },
+              data: {
+                grade: subject.grade,
+                status,
+                source: EnrollmentSource.TRANSCRIPT,
+              },
+            });
+          } else {
+            const created = await tx.enrollment.create({
+              data: {
+                studentId,
+                subjectId: subject.subjectID as string,
+                grade: subject.grade,
+                status,
+                attempt: 1,
+                source: EnrollmentSource.TRANSCRIPT,
+              },
+            });
+            existingMap.set(subject.subjectID as string, created.id);
+          }
         }
-      }
 
-      // Calcular promedio dinámico de inscripciones con calificación
-      const allEnrollments = await tx.enrollment.findMany({
-        where: { studentId, grade: { not: null } },
-      });
+        // Calcular promedio dinámico de inscripciones con calificación
+        const allEnrollments = await tx.enrollment.findMany({
+          where: { studentId, grade: { not: null } },
+          select: { grade: true },
+        });
 
-      const sum = allEnrollments.reduce((acc, curr) => acc + (curr.grade || 0), 0);
-      newAverage = allEnrollments.length > 0 ? parseFloat((sum / allEnrollments.length).toFixed(2)) : 0;
+        const sum = allEnrollments.reduce(
+          (acc, curr) => acc + (curr.grade || 0),
+          0,
+        );
+        newAverage =
+          allEnrollments.length > 0
+            ? parseFloat((sum / allEnrollments.length).toFixed(2))
+            : 0;
 
-      await tx.student.update({
-        where: { id: studentId },
-        data: { average: newAverage },
-      });
-    });
+        await tx.student.update({
+          where: { id: studentId },
+          data: {
+            average: newAverage,
+            ...(analysis.detectedSemester ? { currentSemester: analysis.detectedSemester } : {}),
+          },
+        });
+      },
+      {
+        maxWait: 15000,
+        timeout: 30000,
+      },
+    );
 
     return {
       message: 'Historial procesado y actualizado correctamente en inscripciones (Enrollment).',
       subjectsProcessed: validSubjects.length,
       newAverage,
+      currentSemester: analysis.detectedSemester,
       subjects: validSubjects,
     };
   }

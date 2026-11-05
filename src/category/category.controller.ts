@@ -16,14 +16,20 @@ import { RolesGuard } from '../autenticacion/guards/roles.guard';
 import { Roles } from '../autenticacion/decorators/roles.decorator';
 import { RoleType } from '@prisma/client';
 
-@Controller('category')
+@Controller(['category', 'categories'])
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
   @Get('')
   async getAllCategories() {
     try {
-      return await this.categoryService.getAllCategories();
+      const list = await this.categoryService.getAllCategories();
+      return list.map((c) => ({
+        id: c.id,
+        category: c.category,
+        name: c.category,
+        label: c.category,
+      }));
     } catch (error) {
       console.error('ERROR EN GET ALL CATEGORIES:', error);
       throw error;

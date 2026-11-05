@@ -101,7 +101,8 @@ export class AutenticacionService {
   }
 
   private assertPasswordAuthEnabled(): void {
-    if (this.configService.get<string>('ENABLE_PASSWORD_AUTH') !== 'true') {
+    const flag = this.configService.get<string>('ENABLE_PASSWORD_AUTH');
+    if (flag === 'false') {
       throw new ForbiddenException(
         'El acceso con contraseña está deshabilitado. Usa el inicio de sesión con Google.',
       );
@@ -222,9 +223,6 @@ export class AutenticacionService {
     this.validatePasswordStrength(dto.password);
 
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
-    const rawVerificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationTokenHash = this.sha256(rawVerificationToken);
-    const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 horas
 
     // Buscar si ya existe el usuario o el número de cuenta
     const existingUser = await this.prisma.user.findUnique({
@@ -238,50 +236,48 @@ export class AutenticacionService {
         })
       : null;
 
-    // Anti-enumeración: si la cuenta ya existe y ya está verificada con contraseña activa,
-    // registramos en bitácora y devolvemos exactamente la misma estructura de respuesta.
+    // Si la cuenta o el número de cuenta ya existen y están activos/registrados, rechazar con conflicto
     if (
       (existingUser &&
         (existingUser.emailVerifiedAt ||
           (existingUser as any).googleSub ||
           (existingUser as any).passwordHash)) ||
-      (existingStudent &&
-        existingUser &&
-        existingStudent.userId !== existingUser.id)
+      existingStudent
     ) {
       await this.auditService.log({
         actorType: 'SYSTEM',
         actorId: existingUser?.id,
         action: 'REGISTER_ATTEMPT_ALREADY_REGISTERED',
-        detail: { email },
+        detail: { email, accountNumber: extractedAccountNumber },
       });
 
-      return {
-        message:
-          'Si los datos institucionales son válidos, hemos enviado las instrucciones de verificación a tu correo @pcpuma.acatlan.unam.mx.',
-        requiresVerification: true,
-      };
+      throw new ConflictException(
+        'El correo institucional o número de cuenta ya se encuentra registrado en el sistema.',
+      );
     }
 
     const institution = await this.getOrCreateDefaultInstitution();
     const careerId = await this.resolveCareerId(institution.id, dto.careerId);
 
+    let registeredUser: any;
+
     if (existingUser) {
-      // Cuenta preexistente (ej. invitada en lista o pendiente de verificar)
-      await this.prisma.user.update({
+      // Cuenta preexistente (ej. invitada en lista)
+      registeredUser = await this.prisma.user.update({
         where: { id: existingUser.id },
         data: {
           name: dto.name.trim(),
           lastNameP: dto.lastNameP.trim(),
           lastNameM: dto.lastNameM?.trim() || existingUser.lastNameM || null,
           passwordHash,
-          verificationTokenHash,
-          verificationExpiresAt,
+          emailVerifiedAt: existingUser.emailVerifiedAt || new Date(),
+          status: UserStatus.ACTIVE,
         } as any,
+        include: { roles: true, student: true },
       });
 
       if (!existingUser.student) {
-        await this.prisma.student.create({
+        const createdStudent = await this.prisma.student.create({
           data: {
             userId: existingUser.id,
             accountNumber: extractedAccountNumber,
@@ -291,17 +287,16 @@ export class AutenticacionService {
             hasCompletedQuiz: false,
           },
         });
+        registeredUser.student = createdStudent;
       }
     } else {
-      await this.prisma.$transaction(async (tx) => {
+      registeredUser = await this.prisma.$transaction(async (tx) => {
         const createdUser = await tx.user.create({
           data: {
             institutionId: institution.id,
             email,
             passwordHash,
-            verificationTokenHash,
-            verificationExpiresAt,
-            emailVerifiedAt: null,
+            emailVerifiedAt: new Date(),
             name: dto.name.trim(),
             lastNameP: dto.lastNameP.trim(),
             lastNameM: dto.lastNameM?.trim() || null,
@@ -314,7 +309,7 @@ export class AutenticacionService {
           } as any,
         });
 
-        await tx.student.create({
+        const createdStudent = await tx.student.create({
           data: {
             userId: createdUser.id,
             accountNumber: extractedAccountNumber,
@@ -324,36 +319,63 @@ export class AutenticacionService {
             hasCompletedQuiz: false,
           },
         });
+
+        return { ...createdUser, student: createdStudent };
       });
     }
 
     await this.auditService.log({
       actorType: 'STUDENT',
-      action: 'STUDENT_REGISTERED_PENDING_VERIFICATION',
+      actorId: registeredUser.id,
+      action: 'STUDENT_REGISTERED',
       detail: { email, accountNumber: extractedAccountNumber },
     });
 
-    const verificationUrl = this.buildFrontendAuthLink(
-      'verify',
-      email,
-      rawVerificationToken,
-    );
-    await this.dispatchInstitutionalEmail(
-      email,
-      'Verifica tu cuenta institucional en PUMAIA',
-      `Hola ${dto.name.trim()},\n\nPara activar tu cuenta en PUMAIA (FES Acatlán, UNAM), verifica tu correo institucional ingresando al siguiente enlace:\n${verificationUrl}\n\nCódigo de verificación: ${rawVerificationToken}\nEste enlace y código expiran en 24 horas.`,
-      {
-        category: 'VERIFICATION',
-        actionUrl: verificationUrl,
-        token: rawVerificationToken,
-        expiresAt: verificationExpiresAt,
-      },
-    );
+    // Control de verificación de correo mediante feature flag (preparado para futura activación)
+    const requireEmailVerification = process.env.REQUIRE_EMAIL_VERIFICATION === 'true';
+
+    if (requireEmailVerification) {
+      return {
+        message: 'Usuario registrado. Por favor verifica tu correo institucional para activar tu cuenta.',
+        requiresVerification: true,
+        user: {
+          id: registeredUser.id,
+          email: registeredUser.email,
+          name: `${registeredUser.name} ${registeredUser.lastNameP}`.trim(),
+          accountNumber: extractedAccountNumber,
+        },
+      };
+    }
+
+    // Flujo activo sin código: creación directa de sesión y emisión de tokens
+    const roles: RoleType[] = [RoleType.STUDENT];
+
+    const tokens = await this.createSessionAndTokens({
+      userId: registeredUser.id,
+      studentId: registeredUser.student?.id || null,
+      professorId: null,
+      email: registeredUser.email,
+      name: `${registeredUser.name} ${registeredUser.lastNameP}`.trim(),
+      roles,
+      accountNumber: extractedAccountNumber,
+    });
 
     return {
-      message:
-        'Si los datos institucionales son válidos, hemos enviado las instrucciones de verificación a tu correo @pcpuma.acatlan.unam.mx.',
-      requiresVerification: true,
+      message: 'Usuario registrado y autenticado correctamente.',
+      requiresVerification: false,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      tokenType: 'Bearer',
+      expiresIn: 900,
+      user: {
+        id: registeredUser.id,
+        email: registeredUser.email,
+        name: `${registeredUser.name} ${registeredUser.lastNameP}`.trim(),
+        accountNumber: extractedAccountNumber,
+        roles,
+        hasCompletedQuiz: false,
+        currentSemester: registeredUser.student?.currentSemester ?? 1,
+      },
     };
   }
 
@@ -479,18 +501,38 @@ export class AutenticacionService {
   ): Promise<TokenResponse> {
     this.assertPasswordAuthEnabled();
     let email = (dto.email || '').trim().toLowerCase();
-    if (!email && dto.accountNumber) {
-      email = `${dto.accountNumber}${this.studentDomain}`;
+    let accountNum: number | undefined =
+      dto.accountNumber !== undefined && dto.accountNumber !== null
+        ? Number(dto.accountNumber)
+        : undefined;
+
+    if (!email && accountNum) {
+      email = `${accountNum}${this.studentDomain}`;
+    } else if (email && !email.includes('@') && /^\d+$/.test(email)) {
+      accountNum = parseInt(email, 10);
+      email = `${email}${this.studentDomain}`;
+    } else if (email && email.includes('@')) {
+      const localPart = email.split('@')[0];
+      if (/^\d+$/.test(localPart)) {
+        accountNum = parseInt(localPart, 10);
+      }
     }
 
-    if (!email || !dto.password) {
+    if ((!email && !accountNum) || !dto.password) {
       throw new BadRequestException(
-        'Debes proporcionar tu correo institucional y contraseña.',
+        'Debes proporcionar tu correo institucional o número de cuenta y tu contraseña.',
       );
     }
 
-    const user: any = await this.prisma.user.findUnique({
-      where: { email },
+    const user: any = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          ...(email ? [{ email }] : []),
+          ...(accountNum !== undefined
+            ? [{ student: { accountNumber: accountNum } }]
+            : []),
+        ],
+      },
       include: {
         roles: true,
         student: true,
@@ -568,17 +610,13 @@ export class AutenticacionService {
       );
     }
 
-    // Verificación obligatoria del correo antes de permitir acceso
+    // Si el correo aún no tenía marca de verificación, se valida automáticamente para permitir acceso inmediato
     if (!user.emailVerifiedAt) {
-      await this.auditService.log({
-        actorType: 'STUDENT',
-        actorId: user.id,
-        action: 'LOGIN_REJECTED_UNVERIFIED_EMAIL',
-        detail: { email },
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerifiedAt: new Date() } as any,
       });
-      throw new ForbiddenException(
-        'Debes verificar tu correo institucional antes de iniciar sesión.',
-      );
+      user.emailVerifiedAt = new Date();
     }
 
     const roles: RoleType[] = (user.roles || []).map((r: any) => r.role);
@@ -1362,7 +1400,7 @@ export class AutenticacionService {
         detail: { email },
       });
       throw new UnauthorizedException(
-        'Acceso denegado. Las cuentas de profesor o administrador requieren invitación previa por parte de la institución.',
+        'Acceso denegado. Las cuentas de profesor o administrador requieren invitación previa por parte de la institución. Para alumnos, inicia sesión con tu cuenta institucional @pcpuma.acatlan.unam.mx.',
       );
     }
 
@@ -2029,7 +2067,13 @@ export class AutenticacionService {
         );
       }
 
-      const configuredAud = this.configService.get<string>('GOOGLE_CLIENT_ID');
+      const rawAud =
+        this.configService.get<string>('GOOGLE_CLIENT_ID') ||
+        this.configService.get<string>('NEXT_PUBLIC_GOOGLE_CLIENT_ID') ||
+        process.env.GOOGLE_CLIENT_ID ||
+        process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+      const configuredAud = rawAud?.replace(/^["']|["']$/g, '').trim();
+
       if (!configuredAud) {
         this.logger.error(
           'GOOGLE_CLIENT_ID no está configurado en las variables de entorno.',
@@ -2039,9 +2083,14 @@ export class AutenticacionService {
         );
       }
 
-      if (payload.aud !== configuredAud) {
+      const audMatches =
+        payload.aud === configuredAud ||
+        payload.azp === configuredAud ||
+        (Array.isArray(payload.aud) && payload.aud.includes(configuredAud));
+
+      if (!audMatches) {
         this.logger.error(
-          `Audiencia de Google no coincide: recibida=${payload.aud}, esperada=${configuredAud}`,
+          `Audiencia de Google no coincide: recibida=${payload.aud}, azp=${payload.azp}, esperada=${configuredAud}`,
         );
         throw new UnauthorizedException(
           'La audiencia (aud) del token de Google no coincide con el cliente de PumaIA.',

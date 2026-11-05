@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, BadGatewayException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AICategoryService } from '../ai-category/ai-category.service';
 import { StudentsService } from '../students/students.service';
@@ -50,7 +50,7 @@ export class AIResultService {
   }
 
   async processAndSaveAnalysis(studentId: string): Promise<any> {
-    // 1. Obtener expediente relacional del alumno
+    // 1. Obtener expediente relacional completo del alumno autenticado
     const student = await this.studentsService.getFullProfileSummary(studentId);
     if (!student) throw new BadRequestException('Estudiante no encontrado.');
 
@@ -63,38 +63,91 @@ export class AIResultService {
       return String(ans);
     };
 
-    const studentContext = `
-      Nombre: ${student.name} ${student.lastNameP}
-      Semestre: ${student.currentSemester} | Promedio: ${student.average}
-      Intereses: ${student.interest || 'No declarados'}
-      Cursos: ${student.courses?.map((c: any) => c.course?.name).filter(Boolean).join(', ') || 'Ninguno'}
-      Concursos: ${student.contests?.map((cn: any) => cn.contest?.name).filter(Boolean).join(', ') || 'Ninguno'}
-      Becas: ${student.schoolarships?.map((s: any) => s.schoolarship?.name).filter(Boolean).join(', ') || 'Ninguna'}
-      Experiencia laboral: ${student.experiences?.map((e: any) => e.areaExpertise?.name).filter(Boolean).join(', ') || 'Ninguna'}
-      Idiomas: ${student.languages?.map((l: any) => l.language?.name).filter(Boolean).join(', ') || 'Ninguno'}
-      ${student.answers?.map((a: any, index: number) => `Pregunta ${index + 1} [ID: ${a.questionId}]: ${parseAnswerText(a.answer)}`).join('\n  ') || 'No ha respondido el cuestionario base.'}
-    `;
+    const enrolledSubjectsText = (student.enrollments || [])
+      .map((e: any) => {
+        const subName = e.subject?.subject || 'Asignatura';
+        const gradeText = e.grade !== null && e.grade !== undefined ? `Calificación: ${e.grade}` : 'En curso';
+        const statusText = e.status || '';
+        return `- ${subName} (${gradeText}, ${statusText})`;
+      })
+      .join('\n      ');
 
-    // 3. Petición a FastAPI
+    const languagesText = (student.languages || [])
+      .map((l: any) => {
+        const langName = l.language?.name || 'Idioma';
+        const levelName = l.skill?.proficiency || l.skill?.name || 'Nivel no especificado';
+        return `${langName} (Nivel: ${levelName})`;
+      })
+      .join(', ');
+
+    const experiencesText = (student.experiences || [])
+      .map((e: any) => {
+        const areaName = e.areaExpertise?.name || 'General';
+        const catName = e.category?.category || '';
+        return `${areaName}${catName ? ` [${catName}]` : ''}`;
+      })
+      .join(', ');
+
+    const studentContext = `
+      Nombre del Alumno: ${student.fullName || `${student.name} ${student.lastNameP}`}
+      Carrera: ${student.career || 'Licenciatura en Matemáticas Aplicadas y Computación'}
+      Semestre Actual Detectado: ${student.currentSemester}° semestre
+      Promedio General: ${student.average || 'Sin promedio registrado'}
+      Intereses Declarados: ${student.interest || 'No declarados'}
+
+      Historial Académico y Materias Cursadas:
+      ${enrolledSubjectsText || 'Sin materias registradas aún'}
+
+      Cursos Realizados: ${student.courses?.map((c: any) => c.course?.name).filter(Boolean).join(', ') || 'Ninguno'}
+      Concursos y Competencias: ${student.contests?.map((cn: any) => cn.contest?.name).filter(Boolean).join(', ') || 'Ninguno'}
+      Becas Académicas: ${student.schoolarships?.map((s: any) => s.schoolarship?.name).filter(Boolean).join(', ') || 'Ninguna'}
+      Idiomas y Niveles: ${languagesText || 'Solo español nativo'}
+      Experiencia Profesional y Áreas de Especialización: ${experiencesText || 'Sin experiencia profesional previa'}
+
+      Respuestas del Cuestionario Inicial Vocacional y Habilidades:
+      ${student.answers?.map((a: any, index: number) => `Pregunta ${index + 1} [ID: ${a.questionId}] (${a.category || 'General'}): ${parseAnswerText(a.answer)}`).join('\n  ') || 'No ha respondido el cuestionario base.'}
+    `.trim();
+
+    // 2. Petición a FastAPI en Render con timeout de 75 segundos para tolerar cold-start
     const fastApiUrl = process.env.FASTAPI_URL || 'https://server-genai.onrender.com/analyze-profile';
-    const response = await fetch(fastApiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ student_context: studentContext }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 75000);
+
+    let response: any;
+    try {
+      response = await fetch(fastApiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_context: studentContext }),
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        throw new BadGatewayException(
+          'El servidor de inteligencia artificial (Render) está iniciando o tardó demasiado en responder. Por favor reintenta en unos instantes.',
+        );
+      }
+      throw new BadGatewayException(
+        `Error de conexión con el motor de análisis PumaIA: ${err.message || 'Servidor no disponible'}`,
+      );
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
-      throw new Error('PumaIA (FastAPI) no pudo procesar el análisis.');
+      const errBody = await response.text().catch(() => '');
+      throw new BadGatewayException(
+        `El motor de análisis PumaIA devolvió un error (HTTP ${response.status}). ${errBody ? `Detalle: ${errBody}` : 'Intenta nuevamente más tarde.'}`,
+      );
     }
 
     const aiData = await response.json();
 
-    // 4. Validar categorías de IA desde el catálogo
+    // 3. Validar categorías de IA desde el catálogo
     const aiCategories = await this.aiCategoryService.findAll();
     let defaultCategoryId: string;
 
     if (aiCategories.length === 0) {
-      // Si no existe ninguna categoría de IA, crear una por defecto
       const newCat = await this.prisma.aICategory.create({
         data: { name: 'Rutas Profesionales' },
       });
@@ -103,13 +156,12 @@ export class AIResultService {
       defaultCategoryId = aiCategories[0].id;
     }
 
-    // 5. Preparar opciones dinámicas para AIResultOption SIN inventar opciones dummy
+    // 4. Preparar opciones dinámicas para AIResultOption SIN inventar opciones dummy
     const structuredOptions: { position: number; title: string; description: string }[] = [];
 
     const serializedDescriptionA = `${aiData.descriptionA || ''}||${aiData.meta_summary || ''}||${aiData.meta_strengths || ''}||${aiData.meta_opportunities || ''}`;
 
     if (Array.isArray(aiData.options) && aiData.options.length > 0) {
-      // Si la IA responde con un arreglo estructurado de opciones
       const validOptions = aiData.options
         .filter((o: any) => o && (o.title || o.option))
         .slice(0, 5);
@@ -123,7 +175,6 @@ export class AIResultService {
         });
       });
     } else {
-      // Si la IA responde con las claves tradicionales (optionA, optionB, ...)
       const candidates = [
         { title: aiData.optionA, description: serializedDescriptionA },
         { title: aiData.optionB, description: aiData.descriptionB || '' },
@@ -147,7 +198,7 @@ export class AIResultService {
       throw new BadRequestException('El motor de IA no generó recomendaciones vocacionales válidas.');
     }
 
-    // 6. Persistencia relacional atómica (esquema v3: AIResult + AIResultOption)
+    // 5. Persistencia relacional atómica (esquema v3: AIResult + AIResultOption)
     await this.prisma.$transaction(async (tx) => {
       const existing = await tx.aIResult.findFirst({
         where: { studentId },

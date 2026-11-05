@@ -29,6 +29,7 @@ export class AreasExpertiseController {
         const areas = await this.service.findAll();
         return areas.map(area => ({
             id: area.id,
+            name: area.name,
             label: area.name
         }));
     }

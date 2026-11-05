@@ -14,6 +14,7 @@ import {
   AttendanceStatus,
   AttendanceMethod,
   RoleType,
+  EnrollmentStatus,
 } from '@prisma/client';
 import type { AuthUser } from '../autenticacion/interfaces/auth-user.interface';
 import * as crypto from 'crypto';
@@ -22,6 +23,9 @@ import * as crypto from 'crypto';
 export class AttendanceService {
   /** Ventana de rotación del código QR dinámico (25 segundos, dentro del rango requerido de 20 a 30s) */
   public static readonly QR_WINDOW_SECONDS = 25;
+
+  /** Secciones con horario simulado activo para pruebas de desarrollo */
+  private readonly simulatedSections = new Set<string>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -132,7 +136,125 @@ export class AttendanceService {
   }
 
   /**
+   * Determina si la sección se encuentra dentro de su horario lectivo configurado
+   * o si cuenta con simulación activa en el backend para pruebas.
+   */
+  async isSectionInClassTime(sectionId: string): Promise<{
+    inSchedule: boolean;
+    isSimulated: boolean;
+    meetings: any[];
+  }> {
+    const isSimulated = this.simulatedSections.has(sectionId);
+
+    const section = await this.prisma.courseSection.findUnique({
+      where: { id: sectionId },
+      include: {
+        meetings: {
+          orderBy: { weekday: 'asc' },
+        },
+      },
+    });
+
+    if (!section) {
+      throw new NotFoundException('Grupo no encontrado.');
+    }
+
+    if (isSimulated) {
+      return {
+        inSchedule: true,
+        isSimulated: true,
+        meetings: section.meetings,
+      };
+    }
+
+    // Calcular día de la semana y hora actual en zona horaria Ciudad de México (America/Mexico_City)
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Mexico_City',
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const weekdayStr = parts.find((p) => p.type === 'weekday')?.value;
+    const hourStr = parts.find((p) => p.type === 'hour')?.value || '00';
+    const minuteStr = parts.find((p) => p.type === 'minute')?.value || '00';
+
+    const weekdayMap: Record<string, number> = {
+      Mon: 1,
+      Tue: 2,
+      Wed: 3,
+      Thu: 4,
+      Fri: 5,
+      Sat: 6,
+      Sun: 7,
+    };
+    const currentWeekday = weekdayMap[weekdayStr || ''] || 1;
+    const currentMinutes = parseInt(hourStr, 10) * 60 + parseInt(minuteStr, 10);
+
+    const match = (section.meetings || []).some((m) => {
+      if (m.weekday !== currentWeekday) return false;
+      const startD = new Date(m.startTime);
+      const endD = new Date(m.endTime);
+      const startMin = startD.getUTCHours() * 60 + startD.getUTCMinutes();
+      const endMin = endD.getUTCHours() * 60 + endD.getUTCMinutes();
+      return currentMinutes >= startMin && currentMinutes <= endMin;
+    });
+
+    return {
+      inSchedule: match,
+      isSimulated: false,
+      meetings: section.meetings,
+    };
+  }
+
+  /**
+   * Activa o desactiva la simulación de horario lectivo en el backend para pruebas.
+   */
+  async setSectionScheduleSimulation(
+    sectionId: string,
+    active: boolean,
+    user?: AuthUser,
+  ) {
+    const isDev =
+      process.env.NODE_ENV !== 'production' ||
+      process.env.ENABLE_DEV_LOGIN === 'true';
+    if (!isDev) {
+      throw new ForbiddenException(
+        'La simulación de horario lectivo solo está permitida en entornos de pruebas y desarrollo.',
+      );
+    }
+
+    const section = await this.prisma.courseSection.findUnique({
+      where: { id: sectionId },
+    });
+    if (!section) {
+      throw new NotFoundException('Grupo no encontrado.');
+    }
+
+    await this.assertSectionOwnership(section, user);
+
+    if (active) {
+      this.simulatedSections.add(sectionId);
+    } else {
+      this.simulatedSections.delete(sectionId);
+    }
+
+    const status = await this.isSectionInClassTime(sectionId);
+    return {
+      sectionId,
+      simulated: active,
+      inSchedule: status.inSchedule,
+      message: active
+        ? 'Horario lectivo simulado activado en el backend para este grupo.'
+        : 'Simulación de horario desactivada.',
+    };
+  }
+
+  /**
    * Abre una nueva sesión de clase generando una semilla secreta y devolviendo el primer token QR dinámico.
+   * Valida estrictamente que el grupo se encuentre dentro de su horario lectivo o con simulación activa en backend.
    */
   async openSession(
     sectionId: string,
@@ -147,6 +269,14 @@ export class AttendanceService {
     }
 
     await this.assertSectionOwnership(section, user);
+
+    // Validación de horario lectivo o simulación backend
+    const scheduleCheck = await this.isSectionInClassTime(sectionId);
+    if (!scheduleCheck.inSchedule) {
+      throw new BadRequestException(
+        'No es posible abrir una sesión fuera del horario académico configurado para esta asignatura. Para realizar pruebas de demostración, activa la simulación de horario en el backend.',
+      );
+    }
 
     const existingOpen = await this.prisma.classSession.findFirst({
       where: {
@@ -177,7 +307,7 @@ export class AttendanceService {
       },
       include: {
         section: {
-          include: { subject: true },
+          include: { subject: true, professor: true },
         },
       },
     });
@@ -253,7 +383,10 @@ export class AttendanceService {
     const isEnrolled = await this.prisma.enrollment.findFirst({
       where: {
         studentId,
-        sectionId: session.sectionId,
+        OR: [
+          { sectionId: session.sectionId },
+          ...(session.section?.subjectId ? [{ subjectId: session.section.subjectId }] : []),
+        ],
       },
     });
 
@@ -286,6 +419,19 @@ export class AttendanceService {
       }
     }
 
+    const recordInclude = {
+      session: {
+        include: {
+          section: {
+            include: {
+              subject: true,
+              professor: true,
+            },
+          },
+        },
+      },
+    };
+
     if (typeof (this.prisma.attendanceRecord as any)?.create === 'function') {
       return this.prisma.attendanceRecord.create({
         data: {
@@ -295,6 +441,7 @@ export class AttendanceService {
           method: AttendanceMethod.QR,
           markedAt: new Date(),
         },
+        include: recordInclude,
       });
     }
 
@@ -317,6 +464,7 @@ export class AttendanceService {
         method: AttendanceMethod.QR,
         markedAt: new Date(),
       },
+      include: recordInclude,
     });
   }
 
@@ -456,6 +604,97 @@ export class AttendanceService {
   }
 
   /**
+   * Elimina un registro de asistencia por su ID (para pruebas y reversión controlada).
+   */
+  async deleteRecord(recordId: string, user?: AuthUser) {
+    const existing = await this.prisma.attendanceRecord.findUnique({
+      where: { id: recordId },
+      include: {
+        session: {
+          include: { section: true },
+        },
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Registro de asistencia no encontrado.');
+    }
+
+    if (user && existing.session?.section) {
+      await this.assertSectionOwnership(existing.session.section, user);
+    }
+
+    await this.prisma.attendanceRecord.delete({
+      where: { id: recordId },
+    });
+
+    return { success: true, message: 'Registro de asistencia eliminado con éxito.' };
+  }
+
+  /**
+   * Elimina la asistencia de un alumno específico en una sesión dada (por studentId o cuenta).
+   */
+  async resetStudentAttendanceInSession(sessionId: string, studentId: string, user?: AuthUser) {
+    const session = await this.prisma.classSession.findUnique({
+      where: { id: sessionId },
+      include: { section: true },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Sesión de clase no encontrada.');
+    }
+
+    if (user && session.section) {
+      await this.assertSectionOwnership(session.section, user);
+    }
+
+    // Buscar si studentId es un UUID directo o si pertenece a un student con ese id/cuenta
+    const deleted = await this.prisma.attendanceRecord.deleteMany({
+      where: {
+        sessionId,
+        OR: [
+          { studentId },
+          { student: { id: studentId } },
+        ],
+      },
+    });
+
+    return {
+      success: true,
+      count: deleted.count,
+      message: `Se eliminaron ${deleted.count} registro(s) de asistencia para la sesión.`,
+    };
+  }
+
+  /**
+   * Elimina todos los registros de asistencia de una sesión de clase (reinicio general de pruebas).
+   */
+  async resetAllSessionAttendances(sessionId: string, user?: AuthUser) {
+    const session = await this.prisma.classSession.findUnique({
+      where: { id: sessionId },
+      include: { section: true },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Sesión de clase no encontrada.');
+    }
+
+    if (user && session.section) {
+      await this.assertSectionOwnership(session.section, user);
+    }
+
+    const deleted = await this.prisma.attendanceRecord.deleteMany({
+      where: { sessionId },
+    });
+
+    return {
+      success: true,
+      count: deleted.count,
+      message: `Se eliminaron todos los registros (${deleted.count}) de la sesión.`,
+    };
+  }
+
+  /**
    * Consulta el historial de asistencia del estudiante autenticado.
    */
   async getMyAttendance(studentId: string, sectionId?: string) {
@@ -481,39 +720,229 @@ export class AttendanceService {
 
   /**
    * Consulta los registros de asistencia de una sesión de clase (valida titularidad del profesor).
+   * Devuelve la lista completa de alumnos del grupo con su estado puntual: PRESENT o PENDING.
    */
   async getSessionRecords(sessionId: string, user?: AuthUser) {
-    if (user && typeof (this.prisma.classSession as any)?.findUnique === 'function') {
-      const session = await this.prisma.classSession.findUnique({
-        where: { id: sessionId },
-        include: { section: true },
-      });
-
-      if (!session) {
-        throw new NotFoundException('Sesión de clase no encontrada.');
-      }
-
-      await this.assertSectionOwnership(session.section, user);
-    }
-
-    return this.prisma.attendanceRecord.findMany({
-      where: { sessionId },
+    const session = await this.prisma.classSession.findUnique({
+      where: { id: sessionId },
       include: {
-        student: {
+        section: {
           include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                lastNameP: true,
-                lastNameM: true,
-                email: true,
+            subject: true,
+            roster: {
+              include: {
+                linkedStudent: {
+                  include: { user: true },
+                },
+              },
+            },
+            enrollments: {
+              include: {
+                student: {
+                  include: { user: true },
+                },
               },
             },
           },
         },
+        records: {
+          include: {
+            student: {
+              include: { user: true },
+            },
+          },
+        },
       },
-      orderBy: { markedAt: 'asc' },
     });
+
+    if (!session) {
+      throw new NotFoundException('Sesión de clase no encontrada.');
+    }
+
+    if (user && session.section) {
+      await this.assertSectionOwnership(session.section, user);
+    }
+
+    // Mapear registros de asistencia por studentId
+    const recordByStudentId = new Map<string, any>();
+    (session.records || []).forEach((rec) => {
+      recordByStudentId.set(rec.studentId, rec);
+    });
+
+    // Construir lista única de todos los alumnos asignados al grupo
+    const combinedStudents = new Map<
+      string,
+      {
+        studentId: string;
+        accountNumber: string;
+        name: string;
+        subject: string;
+        subjectCode: number | null;
+        group: string;
+        status: 'PRESENT' | 'PENDING' | 'ABSENT' | 'LATE' | 'EXCUSED';
+        method: string | null;
+        markedAt: string | null;
+        recordId: string | null;
+      }
+    >();
+
+    // 1. Agregar alumnos desde la lista oficial del grupo (SectionRoster)
+    (session.section?.roster || []).forEach((r) => {
+      const studentId = r.linkedStudentId || r.id;
+      const rec =
+        recordByStudentId.get(studentId) ||
+        (r.linkedStudentId ? recordByStudentId.get(r.linkedStudentId) : null);
+      const studentObj = r.linkedStudent;
+      const userObj = studentObj?.user;
+      const name = userObj
+        ? `${userObj.lastNameP} ${userObj.lastNameM || ''} ${userObj.name}`.trim()
+        : r.fullName;
+
+      combinedStudents.set(studentId, {
+        studentId,
+        accountNumber: String(r.accountNumber),
+        name,
+        subject: session.section?.subject?.subject || 'Asignatura',
+        subjectCode: session.section?.subject?.code || null,
+        group: session.section ? `Grupo ${session.section.groupCode}` : 'Grupo',
+        status: rec ? rec.status : 'PENDING',
+        method: rec?.method || null,
+        markedAt: rec?.markedAt ? rec.markedAt.toISOString() : null,
+        recordId: rec?.id || null,
+      });
+    });
+
+    // 2. Agregar alumnos desde inscripciones académicas (Enrollment) si no estaban en el roster
+    (session.section?.enrollments || []).forEach((e) => {
+      const st = e.student;
+      if (!st) return;
+      const studentId = st.id;
+      if (!combinedStudents.has(studentId)) {
+        const rec = recordByStudentId.get(studentId);
+        const userObj = st.user;
+        const name = userObj
+          ? `${userObj.lastNameP} ${userObj.lastNameM || ''} ${userObj.name}`.trim()
+          : 'Alumno';
+
+        combinedStudents.set(studentId, {
+          studentId,
+          accountNumber: String(st.accountNumber),
+          name,
+          subject: session.section?.subject?.subject || 'Asignatura',
+          subjectCode: session.section?.subject?.code || null,
+          group: session.section
+            ? `Grupo ${session.section.groupCode}`
+            : 'Grupo',
+          status: rec ? rec.status : 'PENDING',
+          method: rec?.method || null,
+          markedAt: rec?.markedAt ? rec.markedAt.toISOString() : null,
+          recordId: rec?.id || null,
+        });
+      }
+    });
+
+    return Array.from(combinedStudents.values());
+  }
+
+  /**
+   * Consulta el horario oficial y asignaturas inscritas del estudiante autenticado desde la base de datos.
+   */
+  async getMySchedule(studentId: string) {
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: {
+        studentId,
+        status: EnrollmentStatus.IN_PROGRESS,
+      },
+      include: {
+        subject: true,
+        period: true,
+        section: {
+          include: {
+            professor: true,
+            meetings: {
+              orderBy: { weekday: 'asc' },
+            },
+          },
+        },
+      },
+      orderBy: { subject: { code: 'asc' } },
+    });
+
+    const dayNameMap: Record<number, string> = {
+      1: 'Lunes',
+      2: 'Martes',
+      3: 'Miércoles',
+      4: 'Jueves',
+      5: 'Viernes',
+      6: 'Sábado',
+      7: 'Domingo',
+    };
+
+    const dayAbbrMap: Record<number, string> = {
+      1: 'LU',
+      2: 'MA',
+      3: 'MI',
+      4: 'JU',
+      5: 'VI',
+      6: 'SA',
+      7: 'DO',
+    };
+
+    const subjects = enrollments.map((enr, idx) => {
+      const sec = enr.section;
+      const sub = enr.subject;
+      const meetings = sec?.meetings || [];
+
+      const days =
+        meetings
+          .map((m) => dayNameMap[m.weekday] || '')
+          .filter(Boolean)
+          .join(' y ') || 'Por definir';
+
+      let time = '09:00 - 11:00';
+      if (meetings.length > 0) {
+        const start = new Date(meetings[0].startTime);
+        const end = new Date(meetings[0].endTime);
+        const sH = start.getUTCHours().toString().padStart(2, '0');
+        const sM = start.getUTCMinutes().toString().padStart(2, '0');
+        const eH = end.getUTCHours().toString().padStart(2, '0');
+        const eM = end.getUTCMinutes().toString().padStart(2, '0');
+        time = `${sH}:${sM} - ${eH}:${eM}`;
+      }
+
+      const rawDays = meetings
+        .map((m) => dayAbbrMap[m.weekday] || '')
+        .filter(Boolean)
+        .join(',');
+      const rawSchedule = `${rawDays} ${time.replace(' - ', ' a ')}`;
+
+      const professorName = sec?.professor
+        ? `${sec.professor.name} ${sec.professor.lastNameP} ${sec.professor.lastNameM || ''}`.trim()
+        : 'Profesor asignado';
+
+      return {
+        index: idx + 1,
+        code: sub.code ? String(sub.code) : `100${idx + 1}`,
+        name: sub.subject,
+        officialName: sub.subject,
+        credits: sub.credits || 8,
+        group: sec ? `Grupo ${sec.groupCode}` : 'Grupo asignado',
+        rawSchedule,
+        days,
+        time,
+        classroom: sec?.meetings?.[0]?.room || 'Edificio A-8',
+        professor: professorName,
+        matchStatus: 'matched' as const,
+        subjectID: sub.id,
+        realSubjectId: sub.id,
+        sectionId: sec?.id || null,
+      };
+    });
+
+    return {
+      period: enrollments[0]?.period?.code || '2027-1',
+      subjects,
+      totalCredits: subjects.reduce((acc, s) => acc + (s.credits || 0), 0),
+    };
   }
 }

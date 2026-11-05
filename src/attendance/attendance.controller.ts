@@ -3,6 +3,7 @@ import {
   Post,
   Patch,
   Get,
+  Delete,
   Param,
   Body,
   Query,
@@ -73,6 +74,61 @@ export class AttendanceController {
     @Body() dto: UpdateAttendanceDto,
   ) {
     return this.service.manualOverride(recordId, dto, user.userId, user);
+  }
+
+  @Delete('records/:id')
+  @Roles(RoleType.INSTITUTION_ADMIN, RoleType.PROFESSOR)
+  async deleteRecord(
+    @CurrentUser() user: AuthUser,
+    @Param('id') recordId: string,
+  ) {
+    return this.service.deleteRecord(recordId, user);
+  }
+
+  @Delete('sessions/:sessionId/students/:studentId')
+  @Roles(RoleType.INSTITUTION_ADMIN, RoleType.PROFESSOR)
+  async resetStudentAttendance(
+    @CurrentUser() user: AuthUser,
+    @Param('sessionId') sessionId: string,
+    @Param('studentId') studentId: string,
+  ) {
+    return this.service.resetStudentAttendanceInSession(sessionId, studentId, user);
+  }
+
+  @Delete('sessions/:sessionId/records')
+  @Roles(RoleType.INSTITUTION_ADMIN, RoleType.PROFESSOR)
+  async resetAllSessionAttendances(
+    @CurrentUser() user: AuthUser,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.service.resetAllSessionAttendances(sessionId, user);
+  }
+
+  @Get('sections/:id/schedule-status')
+  async getScheduleStatus(
+    @Param('id') sectionId: string,
+  ) {
+    return this.service.isSectionInClassTime(sectionId);
+  }
+
+  @Post('sections/:id/simulate-schedule')
+  @Roles(RoleType.INSTITUTION_ADMIN, RoleType.PROFESSOR)
+  async simulateSchedule(
+    @Param('id') sectionId: string,
+    @Body('active') active: boolean,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.setSectionScheduleSimulation(sectionId, Boolean(active), user);
+  }
+
+  @Get('my-schedule')
+  async getMySchedule(@CurrentUser() user: AuthUser) {
+    if (!user || !user.studentId) {
+      throw new BadRequestException(
+        'El usuario no cuenta con un perfil de estudiante vinculado.',
+      );
+    }
+    return this.service.getMySchedule(user.studentId);
   }
 
   @Get('my-attendance')

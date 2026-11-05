@@ -198,11 +198,21 @@ export class SectionsService {
     professorId?: string,
     user?: AuthUser,
   ) {
+    let effectiveProfessorId = professorId;
+    if (
+      user?.roles?.includes(RoleType.PROFESSOR) &&
+      !user?.roles?.includes(RoleType.INSTITUTION_ADMIN)
+    ) {
+      const profId = await this.resolveProfessorId(user);
+      if (!profId) return [];
+      effectiveProfessorId = profId;
+    }
+
     const sections = await this.prisma.courseSection.findMany({
       where: {
         ...(periodId && { periodId }),
         ...(subjectId && { subjectId }),
-        ...(professorId && { professorId }),
+        ...(effectiveProfessorId && { professorId: effectiveProfessorId }),
       },
       include: {
         subject: true,
@@ -210,6 +220,20 @@ export class SectionsService {
         professor: true,
         meetings: {
           orderBy: { weekday: 'asc' },
+        },
+        roster: {
+          include: {
+            linkedStudent: {
+              include: { user: true },
+            },
+          },
+        },
+        enrollments: {
+          include: {
+            student: {
+              include: { user: true },
+            },
+          },
         },
         _count: {
           select: {
@@ -234,6 +258,7 @@ export class SectionsService {
         const {
           joinCode: _hiddenJoinCode,
           roster: _hiddenRoster,
+          enrollments: _hiddenEnrollments,
           ...publicSection
         } = sec;
         return publicSection;
@@ -264,6 +289,13 @@ export class SectionsService {
             },
           },
         },
+        enrollments: {
+          include: {
+            student: {
+              include: { user: true },
+            },
+          },
+        },
         _count: {
           select: {
             sessions: true,
@@ -275,6 +307,18 @@ export class SectionsService {
 
     if (!section) {
       throw new NotFoundException(`Grupo con ID ${id} no encontrado.`);
+    }
+
+    if (
+      user?.roles?.includes(RoleType.PROFESSOR) &&
+      !user?.roles?.includes(RoleType.INSTITUTION_ADMIN)
+    ) {
+      const profId = await this.resolveProfessorId(user);
+      if (!profId || section.professorId !== profId) {
+        throw new ForbiddenException(
+          'No tienes permiso para consultar este grupo académico.',
+        );
+      }
     }
 
     const canSeeSensitive = await this.isAuthorizedForSectionSensitiveData(
