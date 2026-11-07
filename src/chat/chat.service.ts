@@ -327,10 +327,16 @@ export class ChatService {
     const url = process.env.N8N_CHAT_WEBHOOK_URL;
     const secret = process.env.N8N_CHAT_SECRET;
 
-    if (!url || (!secret && process.env.NODE_ENV === 'production')) {
-      this.logger.error('Falta N8N_CHAT_WEBHOOK_URL o N8N_CHAT_SECRET.');
+    if (!url) {
+      this.logger.error('Falta la variable de entorno N8N_CHAT_WEBHOOK_URL.');
       throw new ServiceUnavailableException(
         'El asistente no está disponible en este momento.',
+      );
+    }
+
+    if (!secret && process.env.NODE_ENV === 'production') {
+      this.logger.warn(
+        'N8N_CHAT_SECRET no está configurado en producción (se enviará la petición sin header X-PumaIA-Secret).',
       );
     }
 
