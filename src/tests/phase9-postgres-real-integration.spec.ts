@@ -377,6 +377,8 @@ describe('FASE 9 — Integración Real contra PostgreSQL 16 + Servidor SMTP de P
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string, defaultValue?: any) => {
+              // Estas pruebas validan k-anonimato con umbral 10 (el default del piloto es 1).
+              if (key === 'METRICS_MIN_GROUP') return '10';
               return process.env[key] ?? defaultValue;
             }),
           },

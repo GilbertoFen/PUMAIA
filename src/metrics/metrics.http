@@ -1,23 +1,109 @@
 @baseUrl = http://localhost:3001/api
 @adminToken = Bearer eyJhbGciOi...
 
-### Métricas de Rendimiento Académico (Admin / Analyst)
-GET {{baseUrl}}/metrics/academic-performance
+# Todas las respuestas: { minGroupSize, generatedAt, filters, notes, items[] }
+# Celdas por debajo de METRICS_MIN_GROUP: suppressed=true y valores null.
+# Cada consulta queda en AuditLog con action=METRICS_VIEWED.
+
+### Rendimiento académico por materia (filtros opcionales, UUID)
+GET {{baseUrl}}/metrics/academic-performance?periodId=&careerId=
 Authorization: {{adminToken}}
 
-### Métricas de Rezago y Riesgo Académico (Admin / Analyst)
-GET {{baseUrl}}/metrics/retention-risk
+### Rezago y riesgo por carrera y semestre actual
+GET {{baseUrl}}/metrics/retention-risk?periodId=&careerId=
 Authorization: {{adminToken}}
 
-### Métricas Agregadas de Asistencia por Grupo (Admin / Analyst)
-GET {{baseUrl}}/metrics/attendance
+### Asistencia por grupo (sin datos de profesor; solo sesiones cerradas)
+GET {{baseUrl}}/metrics/attendance?periodId=&subjectId=
 Authorization: {{adminToken}}
 
-### Tendencias Temáticas de Consultas IA (Admin / Analyst)
+### Temas del chat (solo consentimiento ANALYTICS de la versión vigente)
 GET {{baseUrl}}/metrics/chat-topics
 Authorization: {{adminToken}}
 
-### Métricas de Satisfacción de Cuestionarios (Admin / Analyst)
+### Cuestionarios: kind = ONBOARDING | CHECK_IN | TERM_SURVEY
 GET {{baseUrl}}/metrics/satisfaction?kind=ONBOARDING
 Authorization: {{adminToken}}
 
+### Debe responder 400 (kind inválido)
+GET {{baseUrl}}/metrics/satisfaction?kind=NOPE
+Authorization: {{adminToken}}
+
+# ===========================================================================
+# Dashboard de administración (INSTITUTION_ADMIN / ANALYST)
+# weeks: 1–52 (por defecto 12). periodId: UUID; sin él, summary y operations usan el periodo en curso.
+# ===========================================================================
+
+### Resumen (tarjetas)
+GET {{baseUrl}}/metrics/dashboard/summary
+Authorization: {{adminToken}}
+
+### Adopción: embudo + activos por semana
+GET {{baseUrl}}/metrics/dashboard/adoption?weeks=12
+Authorization: {{adminToken}}
+
+### Rendimiento: reprobación por materia, histograma, promedio por periodo, recursamiento
+GET {{baseUrl}}/metrics/dashboard/performance
+Authorization: {{adminToken}}
+
+### Avance de créditos por semestre (al corriente / rezago leve / rezago)
+GET {{baseUrl}}/metrics/dashboard/progress
+Authorization: {{adminToken}}
+
+### Chat: temas por grupo, consultas por semana, feedback (solo ANALYTICS vigente)
+GET {{baseUrl}}/metrics/dashboard/chat?weeks=12
+Authorization: {{adminToken}}
+
+### Cuestionarios por pregunta
+GET {{baseUrl}}/metrics/dashboard/questionnaires?kind=ONBOARDING
+Authorization: {{adminToken}}
+
+### Asistencia: semanal global + por materia
+GET {{baseUrl}}/metrics/dashboard/attendance?weeks=12
+Authorization: {{adminToken}}
+
+### Operación: listas de grupo, profesores con cuenta, consentimientos
+GET {{baseUrl}}/metrics/dashboard/operations
+Authorization: {{adminToken}}
+
+# ===========================================================================
+# Etiquetado manual de temas (solo ANALYST). Lee contenido: todo se audita.
+# ===========================================================================
+
+### Catálogo de temas
+GET {{baseUrl}}/metrics/labeling/topics
+Authorization: {{adminToken}}
+
+### Cola: conversaciones elegibles sin etiqueta manual
+GET {{baseUrl}}/metrics/labeling/queue?limit=20
+Authorization: {{adminToken}}
+
+### Etiquetar una conversación
+POST {{baseUrl}}/metrics/labeling/CONVERSATION_UUID
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{ "topicIds": ["TOPIC_UUID"] }
+
+### Quitar una etiqueta puesta por error
+DELETE {{baseUrl}}/metrics/labeling/CONVERSATION_UUID/TOPIC_UUID
+Authorization: {{adminToken}}
+
+### Periodos para el selector del panel (marca el que está en curso)
+GET {{baseUrl}}/metrics/dashboard/periods
+Authorization: {{adminToken}}
+
+# Asistencia: items.bySection = [{ sectionId, subject, groupCode, sessions, students, records, presentRate, lateRate, absentRate, excusedRate }]
+# ordenado por materia y grupo, sin profesor.
+
+### Registrar un reporte impreso (REPORT_GENERATED en AuditLog) antes de window.print
+# section: full | summary | academic | attendance | chat | suggestions
+POST {{baseUrl}}/metrics/reports
+Authorization: {{adminToken}}
+Content-Type: application/json
+
+{ "section": "attendance", "weeks": 12 }
+
+### Etiquetado (solo ANALYST): saltar por reconocer a la persona
+POST {{baseUrl}}/metrics/labeling/00000000-0000-0000-0000-000000000000/skip
+Authorization: {{adminToken}}

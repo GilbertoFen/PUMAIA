@@ -336,7 +336,11 @@ describe('Pruebas de Integración HTTP y E2E Reales — PUMAIA (Prioridades 1 a 
         };
       }),
       findMany: jest.fn(async ({ where }: any) =>
-        db.consents.filter((c) => c.userId === where.userId),
+        where?.userId
+          ? db.consents.filter((c) => c.userId === where.userId)
+          : db.consents
+              .filter((c) => !where?.kind || c.kind === where.kind)
+              .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
       ),
     },
     conversation: {
@@ -391,7 +395,10 @@ describe('Pruebas de Integración HTTP y E2E Reales — PUMAIA (Prioridades 1 a 
       findUnique: jest.fn(
         async ({ where }: any) => db.topics.get(where.id) || null,
       ),
-      findMany: jest.fn(async () => {
+      findMany: jest.fn(async (args: any) => {
+        // MetricsService filtra en la consulta por usuarios con ANALYTICS vigente.
+        const eligible: string[] | undefined =
+          args?.select?.labels?.where?.conversation?.student?.userId?.in;
         return Array.from(db.topics.values()).map((t) => ({
           ...t,
           labels: db.conversationLabels
@@ -421,7 +428,12 @@ describe('Pruebas de Integración HTTP y E2E Reales — PUMAIA (Prioridades 1 a 
                   : null,
               };
             })
-            .filter((l) => l.conversation && !l.conversation.sensitive),
+            .filter((l) => l.conversation && !l.conversation.sensitive)
+            .filter(
+              (l) =>
+                !eligible ||
+                eligible.includes(l.conversation?.student?.userId),
+            ),
         }));
       }),
     },
@@ -949,6 +961,8 @@ describe('Pruebas de Integración HTTP y E2E Reales — PUMAIA (Prioridades 1 a 
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string, defaultValue?: any) => {
+              // Estas pruebas validan k-anonimato con umbral 10 (el default del piloto es 1).
+              if (key === 'METRICS_MIN_GROUP') return '10';
               return process.env[key] ?? defaultValue;
             }),
           },
@@ -1620,9 +1634,11 @@ describe('Pruebas de Integración HTTP y E2E Reales — PUMAIA (Prioridades 1 a 
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
-      expect(topicsSmallRes.body[0].totalStudents).toBe('<10');
-      expect(topicsSmallRes.body[0].totalQueries).toBe('RESTRINGIDO');
-      expect(topicsSmallRes.body[0].kAnonymityProtected).toBe(true);
+      // El alumno previo no otorgó ANALYTICS: el tema queda en 0 (un cero no identifica a nadie).
+      const small = topicsSmallRes.body.items[0];
+      expect(small.totalStudents).toBe(0);
+      expect(small.totalConversations).toBe(0);
+      expect(small.suppressed).toBe(false);
 
       // Sembrar 9 estudiantes con consentimiento ANALYTICS y conversaciones no sensibles etiquetadas (total = 9 < 10 -> sigue protegido)
       const analyticsNotice = Array.from(db.privacyNotices.values()).find(
@@ -1671,8 +1687,8 @@ describe('Pruebas de Integración HTTP y E2E Reales — PUMAIA (Prioridades 1 a 
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
-      expect(topicsNineRes.body[0].totalStudents).toBe('<10');
-      expect(topicsNineRes.body[0].kAnonymityProtected).toBe(true);
+      expect(topicsNineRes.body.items[0].totalStudents).toBeNull();
+      expect(topicsNineRes.body.items[0].suppressed).toBe(true);
 
       // Agregar el décimo estudiante único con consentimiento ANALYTICS y conversación no sensible (total = 10 >= 10 -> revela métrica agregada)
       const uid10 = nextUuid();
@@ -1715,9 +1731,9 @@ describe('Pruebas de Integración HTTP y E2E Reales — PUMAIA (Prioridades 1 a 
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
 
-      expect(topicsLargeRes.body[0].totalStudents).toBe('10');
-      expect(topicsLargeRes.body[0].totalQueries).toBe(10);
-      expect(topicsLargeRes.body[0].kAnonymityProtected).toBe(false);
+      expect(topicsLargeRes.body.items[0].totalStudents).toBe(10);
+      expect(topicsLargeRes.body.items[0].totalConversations).toBe(10);
+      expect(topicsLargeRes.body.items[0].suppressed).toBe(false);
     });
 
     it('18. Verifica que las 7 vistas SQL en prisma/views_adapted/*.sql usen los nombres físicos reales de prisma/schema.prisma y apliquen k-anonimato', () => {

@@ -1,19 +1,31 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConsentKind } from '@prisma/client';
 import { RecordConsentDto } from './dto/record-consent.dto';
 import { AuditService } from '../audit/audit.service';
 
-const DEFAULT_NOTICE_CONTENT: Record<ConsentKind, { version: string; content: string }> = {
+const DEFAULT_NOTICE_CONTENT: Record<
+  ConsentKind,
+  { version: string; content: string }
+> = {
   [ConsentKind.TERMS_AND_NOTICE]: {
     version: '1.0',
     content:
       'Términos de Uso y Aviso de Privacidad Integral de PUMAIA (FES Acatlán, UNAM). El tratamiento de datos académicos y de orientación se realiza exclusivamente con fines educativos e institucionales.',
   },
   [ConsentKind.ANALYTICS]: {
-    version: '1.0',
-    content:
-      'Consentimiento opcional para analítica institucional agregada y protegida mediante k-anonimato (mínimo 10 alumnos únicos por cohorte). Excluye conversaciones sensibles.',
+    version: '1.1',
+    content: `Este consentimiento es opcional y puedes retirarlo en cualquier momento desde tu perfil. Si no lo aceptas, puedes usar PumaIA con normalidad.
+
+Si lo aceptas, usaremos tus datos de uso para elaborar estadísticas generales que ayuden a mejorar la orientación académica en la carrera. Esas estadísticas se muestran solo como totales de grupos de alumnos, nunca con tu nombre.
+
+Para identificar de qué temas se pregunta más (trámites, materias, becas, etc.), las tres personas del equipo que desarrolla PumaIA podrán leer tus conversaciones con el asistente y clasificarlas por tema. Al hacerlo no verán tu nombre, correo ni número de cuenta, y cada lectura queda registrada. Las conversaciones que marques como sensibles, o que el sistema detecte como sensibles, nunca se leen ni se clasifican.
+
+Tus conversaciones no se usan para evaluarte ni se comparten con profesores ni con autoridades de la facultad.`,
   },
   [ConsentKind.IMPROVEMENT]: {
     version: '1.0',
@@ -35,7 +47,10 @@ export class ConsentsService {
       orderBy: { publishedAt: 'desc' },
     });
 
-    if (!notice && typeof (this.prisma.privacyNotice as any)?.create === 'function') {
+    if (
+      !notice &&
+      typeof (this.prisma.privacyNotice as any)?.create === 'function'
+    ) {
       const def = DEFAULT_NOTICE_CONTENT[kind];
       try {
         notice = await this.prisma.privacyNotice.create({

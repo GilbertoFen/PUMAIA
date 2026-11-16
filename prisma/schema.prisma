@@ -390,6 +390,7 @@ model Subject {
   code          Int?                  @map("codigo")
   semester      Int?                  @map("semestre")
   credits       Int?                  @map("creditos")
+  isOptional    Boolean               @default(false) @map("es_optativa")
   studyPlanId   String?               @map("id_plan_estudios")
   studyPlan     StudyPlan?            @relation(fields: [studyPlanId], references: [id])
   enrollments   Enrollment[]
