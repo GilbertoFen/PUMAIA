@@ -8,6 +8,7 @@ import {
   InternalServerErrorException,
   ServiceUnavailableException,
   Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -51,6 +52,43 @@ export interface TokenResponse {
   };
 }
 
+export interface EmailDispatchResult {
+  /** true solo si el proveedor (SMTP o webhook) aceptó el correo. */
+  delivered: boolean;
+  channel: 'SMTP' | 'WEBHOOK' | null;
+  /** Código seguro (sin contenido) del último error, p. ej. NO_PROVIDER_CONFIGURED o WEBHOOK_HTTP_401. */
+  errorCode: string | null;
+  /** Código HTTP que respondió el webhook (null si no hubo respuesta o no aplica). */
+  httpStatus?: number | null;
+}
+
+/** Nombre visible del remitente. n8n envía desde la cuenta de Gmail conectada. */
+export const EMAIL_SENDER_NAME = 'PumaIA · FES Acatlán';
+/** Tiempo máximo de espera de la respuesta del webhook de correo de n8n. */
+export const N8N_EMAIL_TIMEOUT_MS = 10_000;
+
+export interface InvitationEmailResult {
+  emailSent: boolean;
+  emailError: string | null;
+}
+
+/** Rol en español para correos y pantallas. */
+export const STAFF_ROLE_LABEL: Partial<Record<RoleType, string>> = {
+  [RoleType.PROFESSOR]: 'Profesor',
+  [RoleType.INSTITUTION_ADMIN]: 'Administrador',
+  [RoleType.ANALYST]: 'Analista',
+};
+
+/** Escapa texto para insertarlo en el HTML del correo. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 interface SessionMirror {
   id: string;
   userId: string;
@@ -70,7 +108,7 @@ const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutos
 
 @Injectable()
-export class AutenticacionService {
+export class AutenticacionService implements OnModuleInit {
   private readonly logger = new Logger(AutenticacionService.name);
   private readonly studentDomain = '@pcpuma.acatlan.unam.mx';
   private readonly sessionMirror = new Map<string, SessionMirror>();
@@ -82,9 +120,9 @@ export class AutenticacionService {
       subject: string;
       text: string;
       actionUrl: string;
-      token: string;
+      token: string | null;
       category: 'VERIFICATION' | 'PASSWORD_RESET' | 'STAFF_INVITATION';
-      expiresAt: Date;
+      expiresAt: Date | null;
       sentAt: Date;
     }
   >();
@@ -95,6 +133,27 @@ export class AutenticacionService {
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
   ) {}
+
+  /** Al arrancar, indica qué canal de correo está activo (solo nombres de variables, nunca valores). */
+  onModuleInit() {
+    const has = (k: string) =>
+      Boolean(this.configService.get<string>(k)?.trim());
+    const url = has('N8N_EMAIL_WEBHOOK_URL');
+    const key = has('N8N_EMAIL_WEBHOOK_API_KEY');
+    if (url && key) {
+      this.logger.log(
+        'Correo: webhook de n8n configurado (N8N_EMAIL_WEBHOOK_URL + N8N_EMAIL_WEBHOOK_API_KEY).',
+      );
+      return;
+    }
+    const missing = [
+      !url && 'N8N_EMAIL_WEBHOOK_URL',
+      !key && 'N8N_EMAIL_WEBHOOK_API_KEY',
+    ].filter(Boolean);
+    this.logger.warn(
+      `Correo: sin proveedor configurado; falta ${missing.join(' y ')}. Las invitaciones se crean igual con emailSent:false.`,
+    );
+  }
 
   private sha256(value: string): string {
     return crypto.createHash('sha256').update(value).digest('hex');
@@ -814,11 +873,7 @@ export class AutenticacionService {
 
     const email = dto.email.trim().toLowerCase();
     const institution = await this.getOrCreateDefaultInstitution();
-    const rawResetToken = crypto.randomBytes(32).toString('hex');
-    const resetPasswordTokenHash = this.sha256(rawResetToken);
-    const resetPasswordExpiresAt = new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000,
-    ); // 7 días para activar invitación
+    // La invitación ya no lleva contraseña ni token: la persona entra con Google usando este correo.
 
     const userId: string = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.user.findUnique({
@@ -874,10 +929,6 @@ export class AutenticacionService {
             data: { userId: uid, role: dto.role, grantedBy: grantedByUserId },
           });
         }
-        await tx.user.update({
-          where: { id: uid },
-          data: { resetPasswordTokenHash, resetPasswordExpiresAt } as any,
-        });
       } else {
         const created = await tx.user.create({
           data: {
@@ -887,8 +938,6 @@ export class AutenticacionService {
             lastNameP: dto.lastNameP.trim(),
             lastNameM: dto.lastNameM?.trim() || null,
             status: UserStatus.INVITED,
-            resetPasswordTokenHash,
-            resetPasswordExpiresAt,
             roles: {
               create: { role: dto.role, grantedBy: grantedByUserId },
             },
@@ -935,40 +984,182 @@ export class AutenticacionService {
       },
     });
 
-    if (this.configService.get<string>('ENABLE_PASSWORD_AUTH') !== 'true') {
-      return {
-        message:
-          'Invitación registrada. La persona podrá entrar con su cuenta de Google al iniciar sesión.',
-        user: {
-          id: user.id,
-          email: user.email,
-          status: user.status,
-          roles: user.roles.map((r: any) => r.role),
-        },
-      };
-    }
-
-    const inviteUrl = this.buildFrontendAuthLink('reset', email, rawResetToken);
-    await this.dispatchInstitutionalEmail(
-      email,
-      'Invitación institucional a PUMAIA — Configuración de acceso',
-      `Has sido invitado a PUMAIA con el rol ${dto.role}.\nPara configurar tu contraseña e iniciar sesión, ingresa al siguiente enlace:\n${inviteUrl}\n\nCódigo de activación: ${rawResetToken}\nEsta invitación expira en 7 días.`,
-      {
-        category: 'STAFF_INVITATION',
-        actionUrl: inviteUrl,
-        token: rawResetToken,
-        expiresAt: resetPasswordExpiresAt,
-      },
+    // El correo se envía siempre (también con ENABLE_PASSWORD_AUTH apagado).
+    // Si falla, la invitación queda creada igual y se responde emailSent: false.
+    const emailResult = await this.sendStaffInvitationEmail(
+      user.id,
+      grantedByUserId,
+      { role: dto.role },
     );
 
     return {
-      message: 'Invitación institucional creada correctamente.',
+      message: emailResult.emailSent
+        ? 'Invitación registrada y correo enviado. La persona entra con Google usando exactamente este correo.'
+        : 'Invitación registrada, pero el correo no se pudo enviar. La persona puede entrar con Google usando exactamente este correo; puedes reenviar la invitación más tarde.',
+      emailSent: emailResult.emailSent,
+      emailError: emailResult.emailError,
       user: {
         id: user.id,
         email: user.email,
         status: user.status,
         roles: user.roles.map((r: any) => r.role),
       },
+    };
+  }
+
+  /**
+   * Reenvía el correo de invitación. Solo para personal con estado INVITED
+   * (el control de rol INSTITUTION_ADMIN está en el controlador).
+   */
+  async resendStaffInvitation(
+    invitedUserId: string,
+    actorId: string,
+  ): Promise<InvitationEmailResult & { userId: string; email: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: invitedUserId },
+      include: { roles: true },
+    });
+    if (!user || user.deletedAt || user.status === UserStatus.DELETED) {
+      throw new NotFoundException('La persona indicada no existe.');
+    }
+    if (!user.roles.some((r) => r.role in STAFF_ROLE_LABEL)) {
+      throw new BadRequestException(
+        'Solo se reenvían invitaciones de profesores, administradores o analistas.',
+      );
+    }
+    if (user.status !== UserStatus.INVITED) {
+      throw new ConflictException(
+        'Esta persona ya activó su cuenta; no hace falta reenviar la invitación.',
+      );
+    }
+    const result = await this.sendStaffInvitationEmail(user.id, actorId, {
+      resent: true,
+    });
+    return { ...result, userId: user.id, email: user.email };
+  }
+
+  /**
+   * Arma y envía el correo de invitación (sin contraseñas, tokens ni enlaces mágicos):
+   * quién invita, el rol en español, el correo exacto con el que debe entrar y un botón al login.
+   * Nunca lanza: devuelve emailSent y audita STAFF_INVITATION_EMAIL_SENT / _FAILED sin el contenido.
+   */
+  async sendStaffInvitationEmail(
+    invitedUserId: string,
+    inviterUserId: string,
+    opts: { role?: RoleType; resent?: boolean } = {},
+  ): Promise<InvitationEmailResult> {
+    const [invited, inviter] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: invitedUserId },
+        include: { roles: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: inviterUserId },
+        select: { name: true, lastNameP: true, lastNameM: true },
+      }),
+    ]);
+    if (!invited) {
+      return { emailSent: false, emailError: 'INVITED_USER_NOT_FOUND' };
+    }
+
+    const staffRoles = invited.roles
+      .map((r) => r.role)
+      .filter((r) => r in STAFF_ROLE_LABEL);
+    const roles = opts.role ? [opts.role] : staffRoles;
+    const roleText = roles.map((r) => STAFF_ROLE_LABEL[r] ?? r).join(' y ');
+    const inviterName = inviter
+      ? [inviter.name, inviter.lastNameP, inviter.lastNameM]
+          .filter(Boolean)
+          .join(' ')
+      : 'La administración de PumaIA';
+    const loginPath = roles.some(
+      (r) => r === RoleType.INSTITUTION_ADMIN || r === RoleType.ANALYST,
+    )
+      ? '/admin'
+      : '/profesores';
+    const loginUrl = `${this.getFrontendBaseUrl()}${loginPath}`;
+    const to = invited.email;
+
+    const subject = 'Te invitaron a PumaIA';
+    const text = [
+      `Hola, ${invited.name}:`,
+      '',
+      `${inviterName} te invitó a PumaIA (FES Acatlán, UNAM) con el rol de ${roleText}.`,
+      '',
+      `Entra con tu cuenta de Google usando exactamente este correo: ${to}`,
+      '',
+      `Iniciar sesión: ${loginUrl}`,
+      '',
+      'No necesitas contraseña. Si no esperabas esta invitación, puedes ignorar este correo.',
+      '',
+      'Este correo se envía automáticamente; por favor no lo respondas. Si tienes dudas, comunícate con la coordinación por sus canales oficiales.',
+      '',
+      EMAIL_SENDER_NAME,
+    ].join('\n');
+    const html = `<!doctype html>
+<html lang="es"><body style="margin:0;padding:24px;background:#f4f5f8;font-family:Arial,Helvetica,sans-serif;color:#111;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;border-top:4px solid #C9A84C;">
+<tr><td style="padding:28px 28px 8px;">
+<h1 style="margin:0 0 12px;font-size:20px;color:#060D1F;">Te invitaron a PumaIA</h1>
+<p style="margin:0 0 12px;font-size:15px;line-height:1.5;">Hola, ${escapeHtml(invited.name)}:</p>
+<p style="margin:0 0 12px;font-size:15px;line-height:1.5;"><strong>${escapeHtml(inviterName)}</strong> te invitó a PumaIA (FES Acatlán, UNAM) con el rol de <strong>${escapeHtml(roleText)}</strong>.</p>
+<p style="margin:0 0 20px;font-size:15px;line-height:1.5;">Entra con tu cuenta de Google usando exactamente este correo: <strong>${escapeHtml(to)}</strong></p>
+<p style="margin:0 0 24px;"><a href="${escapeHtml(loginUrl)}" style="display:inline-block;background:#C9A84C;color:#060D1F;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:8px;">Iniciar sesión con Google</a></p>
+<p style="margin:0 0 8px;font-size:13px;color:#555;line-height:1.5;">No necesitas contraseña. Si el botón no funciona, abre: ${escapeHtml(loginUrl)}</p>
+<p style="margin:0 0 12px;font-size:13px;color:#555;line-height:1.5;">Si no esperabas esta invitación, puedes ignorar este correo.</p>
+<p style="margin:0 0 20px;font-size:12px;color:#777;line-height:1.5;">Este correo se envía automáticamente; por favor no lo respondas. Si tienes dudas, comunícate con la coordinación por sus canales oficiales.<br>${escapeHtml(EMAIL_SENDER_NAME)}</p>
+</td></tr></table>
+</td></tr></table>
+</body></html>`;
+
+    let result: EmailDispatchResult;
+    try {
+      result = await this.dispatchInstitutionalEmail(to, subject, text, {
+        category: 'STAFF_INVITATION',
+        actionUrl: loginUrl,
+        html,
+        // La invitación se crea aunque el correo falle: nunca lanzar aquí.
+        throwOnFailure: false,
+      });
+    } catch (err: any) {
+      result = {
+        delivered: false,
+        channel: null,
+        errorCode:
+          err instanceof ServiceUnavailableException
+            ? 'DELIVERY_REQUIRED_FAILED'
+            : err?.code || 'EMAIL_DISPATCH_ERROR',
+        httpStatus: null,
+      };
+    }
+
+    // Bitácora sin el contenido del correo.
+    await this.auditService.log({
+      actorType: 'ADMIN',
+      actorId: inviterUserId,
+      action: result.delivered
+        ? 'STAFF_INVITATION_EMAIL_SENT'
+        : 'STAFF_INVITATION_EMAIL_FAILED',
+      detail: {
+        invitedUserId: invited.id,
+        email: to,
+        roles,
+        channel: result.channel,
+        httpStatus: result.httpStatus ?? null,
+        errorCode: result.errorCode,
+        resent: Boolean(opts.resent),
+      },
+    });
+    if (!result.delivered) {
+      this.logger.error(
+        `[STAFF_INVITATION] Correo no enviado invitedUserId=${invited.id} code=${result.errorCode}`,
+      );
+    }
+
+    return {
+      emailSent: result.delivered,
+      emailError: result.delivered ? null : result.errorCode,
     };
   }
 
@@ -1095,6 +1286,7 @@ export class AutenticacionService {
       given_name?: string;
       family_name?: string;
       picture?: string;
+      email_verified?: boolean;
     },
     preferredCareerId?: string,
     meta?: { userAgent?: string; ipAddress?: string },
@@ -1136,6 +1328,7 @@ export class AutenticacionService {
       given_name?: string;
       family_name?: string;
       picture?: string;
+      email_verified?: boolean;
     },
     email: string,
     preferredCareerId?: string,
@@ -1266,6 +1459,8 @@ export class AutenticacionService {
         );
       }
 
+      await this.assertInvitationEmailVerified(user, profile, isMock);
+
       await this.prisma.user.update({
         where: { id: user.id },
         data: {
@@ -1289,6 +1484,8 @@ export class AutenticacionService {
           avatarUrl: profile.picture || user.avatarUrl,
         },
       });
+
+      await this.auditInvitationAccepted(user, isMock);
 
       if (!user.student) {
         if (this.prisma.student?.findUnique) {
@@ -1378,6 +1575,7 @@ export class AutenticacionService {
       given_name?: string;
       family_name?: string;
       picture?: string;
+      email_verified?: boolean;
     },
     email: string,
     meta?: { userAgent?: string; ipAddress?: string },
@@ -1422,6 +1620,8 @@ export class AutenticacionService {
       );
     }
 
+    await this.assertInvitationEmailVerified(user, profile, isMock);
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
@@ -1443,6 +1643,8 @@ export class AutenticacionService {
         avatarUrl: profile.picture || user.avatarUrl,
       },
     });
+
+    await this.auditInvitationAccepted(user, isMock);
 
     const roles: RoleType[] = (user.roles || []).map((r: any) => r.role);
     const tokens = await this.createSessionAndTokens(
@@ -1480,6 +1682,52 @@ export class AutenticacionService {
         accountNumber: user.student?.accountNumber || null,
       },
     };
+  }
+
+  /**
+   * Activar una invitación exige que Google confirme el correo (email_verified = true).
+   * verifyGoogleIdToken ya lo rechaza antes; esto lo deja explícito por si cambia el flujo.
+   */
+  private async assertInvitationEmailVerified(
+    user: { id: string; status: UserStatus; email: string },
+    profile: { email_verified?: boolean },
+    isMock: boolean,
+  ) {
+    if (user.status !== UserStatus.INVITED || isMock) return;
+    if (profile.email_verified !== true) {
+      await this.auditService.log({
+        actorType: 'SYSTEM',
+        actorId: user.id,
+        action: 'STAFF_INVITATION_REJECTED_UNVERIFIED_EMAIL',
+        detail: { email: user.email },
+      });
+      throw new UnauthorizedException(
+        'Google no confirmó este correo. No se puede activar la invitación.',
+      );
+    }
+  }
+
+  /** Si el usuario estaba INVITED, el login con Google lo activó: queda en la bitácora. */
+  private async auditInvitationAccepted(
+    user: {
+      id: string;
+      status: UserStatus;
+      email: string;
+      roles?: { role: RoleType }[];
+    },
+    isMock: boolean,
+  ) {
+    if (user.status !== UserStatus.INVITED) return;
+    await this.auditService.log({
+      actorType: 'SYSTEM',
+      actorId: user.id,
+      action: 'STAFF_INVITATION_ACCEPTED',
+      detail: {
+        email: user.email,
+        roles: (user.roles ?? []).map((r) => r.role),
+        viaMockGoogle: isMock,
+      },
+    });
   }
 
   // =========================================================================
@@ -2240,6 +2488,12 @@ export class AutenticacionService {
     return this.testEmailOutbox.get(email.trim().toLowerCase()) || null;
   }
 
+  /**
+   * Envía un correo por el webhook de n8n (N8N_EMAIL_WEBHOOK_URL + N8N_EMAIL_WEBHOOK_API_KEY).
+   * En desarrollo, y solo si no hay webhook, puede usar el SMTP de pruebas (SMTP_HOST).
+   * Devuelve si se entregó. Si la entrega es obligatoria (producción o EMAIL_REQUIRE_DELIVERY=true)
+   * y falla, lanza ServiceUnavailableException, salvo que se pase throwOnFailure: false.
+   */
   private async dispatchInstitutionalEmail(
     to: string,
     subject: string,
@@ -2247,10 +2501,14 @@ export class AutenticacionService {
     meta: {
       category: 'VERIFICATION' | 'PASSWORD_RESET' | 'STAFF_INVITATION';
       actionUrl: string;
-      token: string;
-      expiresAt: Date;
+      token?: string | null;
+      expiresAt?: Date | null;
+      /** Versión HTML opcional (se envía junto con el texto plano). */
+      html?: string;
+      /** false = nunca lanza; el llamador decide con el resultado (invitaciones). */
+      throwOnFailure?: boolean;
     },
-  ): Promise<void> {
+  ): Promise<EmailDispatchResult> {
     const isProd = this.configService.get<string>('NODE_ENV') === 'production';
     const requireDelivery =
       isProd ||
@@ -2266,9 +2524,9 @@ export class AutenticacionService {
         subject,
         text,
         actionUrl: meta.actionUrl,
-        token: meta.token,
+        token: meta.token ?? null,
         category: meta.category,
-        expiresAt: meta.expiresAt,
+        expiresAt: meta.expiresAt ?? null,
         sentAt: new Date(),
       };
       this.testEmailOutbox.set(normalizedTo, entry);
@@ -2296,7 +2554,7 @@ export class AutenticacionService {
             actionUrl: entry.actionUrl,
             token: entry.token,
             category: entry.category,
-            expiresAt: entry.expiresAt.toISOString(),
+            expiresAt: entry.expiresAt ? entry.expiresAt.toISOString() : null,
             sentAt: entry.sentAt.toISOString(),
           };
           fs.writeFileSync(resolvedPath, JSON.stringify(current, null, 2), {
@@ -2309,30 +2567,61 @@ export class AutenticacionService {
       }
     }
 
+    const webhookUrl = this.configService
+      .get<string>('N8N_EMAIL_WEBHOOK_URL')
+      ?.trim();
+    const webhookApiKey = this.configService
+      .get<string>('N8N_EMAIL_WEBHOOK_API_KEY')
+      ?.trim();
     const smtpHost = this.configService.get<string>('SMTP_HOST');
-    const smtpPort = Number(
-      this.configService.get<string>('SMTP_PORT') || 1025,
-    );
-    const webhookUrl = this.configService.get<string>('EMAIL_WEBHOOK_URL');
 
-    let delivered = false;
     let lastSafeErrorCode = 'NO_PROVIDER_CONFIGURED';
+    let lastHttpStatus: number | null = null;
 
-    if (smtpHost) {
+    // 1) Canal principal (y único en producción): webhook de n8n, que envía con Gmail.
+    //    Exige URL y clave; si falta alguna se considera "sin proveedor configurado".
+    if (webhookUrl && webhookApiKey) {
+      const res = await this.sendViaN8nWebhook({
+        url: webhookUrl,
+        apiKey: webhookApiKey,
+        to: normalizedTo,
+        subject,
+        text,
+        html: meta.html,
+        category: meta.category,
+      });
+      if (res.delivered) return res;
+      lastSafeErrorCode = res.errorCode ?? 'WEBHOOK_DELIVERY_ERROR';
+      lastHttpStatus = res.httpStatus ?? null;
+    } else if (webhookUrl || webhookApiKey) {
+      // Solo nombres de variables en el log, nunca valores.
+      this.logger.warn(
+        `[EMAIL_DISPATCH] category=${meta.category} status=SKIPPED channel=WEBHOOK reason=MISSING_${webhookUrl ? 'N8N_EMAIL_WEBHOOK_API_KEY' : 'N8N_EMAIL_WEBHOOK_URL'}`,
+      );
+    }
+
+    // 2) SMTP hecho a mano (sin TLS ni autenticación): solo en desarrollo y solo si no hay
+    //    webhook configurado (p. ej. MailHog en pruebas). En producción está desactivado.
+    else if (smtpHost && !isProd) {
       try {
         await this.sendViaSmtp({
           host: smtpHost,
-          port: smtpPort,
+          port: Number(this.configService.get<string>('SMTP_PORT') || 1025),
           from: fromAddress,
           to: normalizedTo,
           subject,
           text,
+          html: meta.html,
         });
-        delivered = true;
         this.logger.log(
           `[EMAIL_DISPATCH] category=${meta.category} status=DELIVERED channel=SMTP`,
         );
-        return;
+        return {
+          delivered: true,
+          channel: 'SMTP',
+          errorCode: null,
+          httpStatus: null,
+        };
       } catch (err: any) {
         lastSafeErrorCode = err?.code || 'SMTP_DELIVERY_ERROR';
         this.logger.warn(
@@ -2341,56 +2630,7 @@ export class AutenticacionService {
       }
     }
 
-    if (webhookUrl) {
-      try {
-        const apiKey = this.configService.get<string>('EMAIL_WEBHOOK_API_KEY');
-        const timeoutMs = Number(
-          this.configService.get<string>('EMAIL_TIMEOUT_MS') || 5000,
-        );
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-        if (apiKey) {
-          headers['X-Email-Api-Key'] = apiKey;
-        }
-
-        const response = await fetch(webhookUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            from: fromAddress,
-            to: normalizedTo,
-            subject,
-            text,
-            category: meta.category,
-            expiresAt: meta.expiresAt.toISOString(),
-          }),
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-
-        if (!response.ok) {
-          lastSafeErrorCode = `WEBHOOK_HTTP_${response.status}`;
-          throw new Error(lastSafeErrorCode);
-        }
-
-        delivered = true;
-        this.logger.log(
-          `[EMAIL_DISPATCH] category=${meta.category} status=DELIVERED channel=WEBHOOK`,
-        );
-        return;
-      } catch (err: any) {
-        lastSafeErrorCode =
-          typeof err?.message === 'string' &&
-          err.message.startsWith('WEBHOOK_HTTP_')
-            ? err.message
-            : err?.code || 'WEBHOOK_DELIVERY_ERROR';
-        this.logger.warn(
-          `[EMAIL_DISPATCH] category=${meta.category} status=FAILED channel=WEBHOOK code=${lastSafeErrorCode}`,
-        );
-      }
-    }
-
-    if (!delivered && requireDelivery) {
+    if (requireDelivery && meta.throwOnFailure !== false) {
       this.logger.error(
         `[EMAIL_DISPATCH] category=${meta.category} status=ABORTED reason=${lastSafeErrorCode}`,
       );
@@ -2402,8 +2642,85 @@ export class AutenticacionService {
     if (!isProd) {
       // Registro sanitizado en desarrollo/pruebas: NUNCA imprime el token ni el enlace secreto en logs
       this.logger.log(
-        `[EMAIL_DISPATCH] category=${meta.category} status=QUEUED_SANDBOX`,
+        `[EMAIL_DISPATCH] category=${meta.category} status=QUEUED_SANDBOX reason=${lastSafeErrorCode}`,
       );
+    }
+    return {
+      delivered: false,
+      channel: null,
+      errorCode: lastSafeErrorCode,
+      httpStatus: lastHttpStatus,
+    };
+  }
+
+  /**
+   * POST al webhook de n8n con {from, to, subject, text, html} y la cabecera X-Email-Api-Key.
+   * Enviado = SOLO si n8n responde 2xx (n8n responde 200 únicamente cuando Gmail confirmó).
+   * Cualquier otra respuesta, error de red o timeout (10 s) = no enviado, con código seguro.
+   * Nunca registra la clave, la URL ni el contenido del correo.
+   */
+  private async sendViaN8nWebhook(params: {
+    url: string;
+    apiKey: string;
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+    category: string;
+  }): Promise<EmailDispatchResult> {
+    try {
+      const response = await fetch(params.url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Email-Api-Key': params.apiKey,
+        },
+        body: JSON.stringify({
+          // n8n envía desde la cuenta de Gmail conectada; esto es solo el nombre visible.
+          from: EMAIL_SENDER_NAME,
+          to: params.to,
+          subject: params.subject,
+          text: params.text,
+          ...(params.html ? { html: params.html } : {}),
+        }),
+        signal: AbortSignal.timeout(N8N_EMAIL_TIMEOUT_MS),
+      });
+
+      if (response.status >= 200 && response.status < 300) {
+        this.logger.log(
+          `[EMAIL_DISPATCH] category=${params.category} status=DELIVERED channel=WEBHOOK http=${response.status}`,
+        );
+        return {
+          delivered: true,
+          channel: 'WEBHOOK',
+          errorCode: null,
+          httpStatus: response.status,
+        };
+      }
+
+      const errorCode = `WEBHOOK_HTTP_${response.status}`;
+      this.logger.error(
+        `[EMAIL_DISPATCH] category=${params.category} status=FAILED channel=WEBHOOK code=${errorCode}`,
+      );
+      return {
+        delivered: false,
+        channel: 'WEBHOOK',
+        errorCode,
+        httpStatus: response.status,
+      };
+    } catch (err: any) {
+      const isTimeout =
+        err?.name === 'TimeoutError' || err?.name === 'AbortError';
+      const errorCode = isTimeout ? 'WEBHOOK_TIMEOUT' : 'WEBHOOK_NETWORK_ERROR';
+      this.logger.error(
+        `[EMAIL_DISPATCH] category=${params.category} status=FAILED channel=WEBHOOK code=${errorCode}`,
+      );
+      return {
+        delivered: false,
+        channel: 'WEBHOOK',
+        errorCode,
+        httpStatus: null,
+      };
     }
   }
 
@@ -2414,7 +2731,35 @@ export class AutenticacionService {
     to: string;
     subject: string;
     text: string;
+    html?: string;
   }): Promise<void> {
+    const normalizeBody = (body: string) =>
+      body.replace(/\r?\n/g, '\r\n').replace(/^\./gm, '..');
+    const bodyLines: string[] = params.html
+      ? (() => {
+          const boundary = `pumaia-${crypto.randomBytes(12).toString('hex')}`;
+          return [
+            `Content-Type: multipart/alternative; boundary="${boundary}"`,
+            '',
+            `--${boundary}`,
+            'Content-Type: text/plain; charset=utf-8',
+            'Content-Transfer-Encoding: 8bit',
+            '',
+            normalizeBody(params.text),
+            `--${boundary}`,
+            'Content-Type: text/html; charset=utf-8',
+            'Content-Transfer-Encoding: 8bit',
+            '',
+            normalizeBody(params.html),
+            `--${boundary}--`,
+          ];
+        })()
+      : [
+          'Content-Type: text/plain; charset=utf-8',
+          'Content-Transfer-Encoding: 8bit',
+          '',
+          normalizeBody(params.text),
+        ];
     return new Promise((resolve, reject) => {
       const socket = net.createConnection(
         { host: params.host, port: params.port },
@@ -2469,10 +2814,7 @@ export class AutenticacionService {
               `To: <${params.to}>`,
               `Subject: ${safeSubject}`,
               'MIME-Version: 1.0',
-              'Content-Type: text/plain; charset=utf-8',
-              'Content-Transfer-Encoding: 8bit',
-              '',
-              params.text.replace(/\r?\n/g, '\r\n').replace(/^\./gm, '..'),
+              ...bodyLines,
               '.',
             ].join('\r\n');
             sendCommand(mimeMessage);

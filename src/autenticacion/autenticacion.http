@@ -158,3 +158,11 @@ Content-Type: application/json
 ### ---------------------------------------------------------------------
 POST {{baseUrl}}/api/autenticacion/logout
 Authorization: Bearer {{accessToken}}
+
+### Personal (solo INSTITUTION_ADMIN): profesores, administradores y analistas
+GET {{baseUrl}}/api/autenticacion/staff
+Authorization: Bearer {{accessToken}}
+
+### Profesores del catálogo sin cuenta (para ligar en la invitación)
+GET {{baseUrl}}/api/autenticacion/staff/professors-without-account?q=garcia
+Authorization: Bearer {{accessToken}}

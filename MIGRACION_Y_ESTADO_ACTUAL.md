@@ -13,7 +13,7 @@ El proyecto **PUMAIA** (anteriormente identificado en repositorios y configuraci
 El proceso de migración hacia la versión actual (`migracion_v2`) tuvo como objetivos primordiales:
 1. **Normalización e Integridad de Base de Datos:** Superar un esquema monolítico plano centrado exclusivamente en el estudiante para adoptar un modelo institucional relacional (3NF), multi-rol y con integridad referencial estricta.
 2. **Seguridad y Control de Acceso (RBAC):** Separar identidades (`User`), roles (`RoleType`: `STUDENT`, `PROFESSOR`, `INSTITUTION_ADMIN`, `ANALYST`) y sesiones multi-dispositivo con detección de reúso de *refresh tokens*.
-3. **Privacidad Institucional y K-Anonimato:** Proteger datos personales de salud mental en el asistente de IA y garantizar que las analíticas directivas cumplan con un umbral estricto de k-anonimato ($k \ge 10$) para evitar la re-identificación de estudiantes.
+3. **Privacidad Institucional y K-Anonimato:** Proteger datos personales de salud mental en el asistente de IA y garantizar que las analíticas directivas cumplan con un umbral mínimo de alumnos configurable con `METRICS_MIN_GROUP` (1 en el piloto) para evitar la re-identificación de estudiantes.
 4. **Desacoplamiento Operativo:** Facilitar el desarrollo y pruebas locales independientes mediante contenedores PostgreSQL con soporte para extensiones vectoriales (`pgvector`), manteniendo la capacidad de conectar al entorno gestionado en **Supabase**.
 
 ---
@@ -258,7 +258,7 @@ El frontend reside en un repositorio/proyecto Next.js desacoplado (`puma-react`)
 | **n8n Webhook (Cloud)** | PROBADO CON ERROR CONTROLADO | URL real probada: `https://n8n-it2v.srv1803922.hstgr.cloud/webhook/v1/pumaIA/chat`. **Diagnóstico técnico:** El webhook responde en menos de 400 ms con HTTP 200 y cuerpo vacío (0 bytes). Esto evidencia que el nodo en n8n está configurado en *Response Immediately*, cerrando la conexión antes de generar la respuesta. NestJS maneja la falla emitiendo `BadGatewayException` y preserva el mensaje del usuario en base de datos. |
 | **FastAPI GenAI (Render)** | CONFIGURADO / PARCIAL | Microservicio en Render (`server-genai.onrender.com`). Expone `/chat` y `/analyze-profile`. Sufre de latencia por *cold start* en plan gratuito. Probado mediante suite unitaria y mocks de simulación HTTP. |
 | **Google OAuth 2.0** | CONFIGURADO | Validación de token criptográfico implementada en `AutenticacionService.loginWithGoogle()`. Requiere configuración del `GOOGLE_CLIENT_ID` definitivo en el entorno de despliegue. |
-| **Servicio de Correo (SMTP / Webhook)** | FUNCIONAL EN LOCAL | En entorno de prueba utiliza la bandeja local `./tmp/email-outbox.json` para validar tokens sin depender de servidores de correo externos. Soporta configuración SMTP estándar. |
+| **Servicio de Correo (Webhook n8n → Gmail)** | CONFIGURADO | Envío por `N8N_EMAIL_WEBHOOK_URL` con la cabecera `X-Email-Api-Key` (`N8N_EMAIL_WEBHOOK_API_KEY`); enviado solo con respuesta 2xx de n8n, timeout de 10 s. El SMTP interno (sin TLS ni autenticación) queda solo para pruebas fuera de producción. Ver la sección "Correo" del README. |
 | **Cloudinary** | FUNCIONAL | Configurado en `src/cloudinary/` para la recepción de archivos en memoria (`Multer`) y subida de avatares a través de stream. |
 
 ---
@@ -297,7 +297,7 @@ Se ejecutaron múltiples niveles de prueba documentados en scripts y suites de J
 | **Asistente de IA (Chat)** | PARCIAL | Persistencia de mensajes, aislamiento por usuario, retroalimentación y detección de contenido sensible. | Corregir la configuración del nodo de respuesta en n8n (evitar respuesta inmediata vacía). |
 | **Orientación Profesional (AI Result)** | PARCIAL | Lógica de generación de 5 rutas de carrera estructuradas en `AIResultOption` y guardado relacional. | Optimizar tiempos de respuesta o cold-start del microservicio FastAPI en Render. |
 | **Gestión Docente y Asistencia** | COMPLETADO | Creación de grupos, listas de alumnos, sesiones de clase y generación de código QR dinámico temporal. | Lector QR nativo en aplicación móvil o escaneo integrado en frontend web. |
-| **Métricas Institucionales y Analítica** | COMPLETADO | Endpoints directivos funcionando con k-anonimato estricto ($k \ge 10$) a través de vistas SQL adaptadas. | Integración de gráficas avanzadas en el panel web directivo. |
+| **Métricas Institucionales y Analítica** | COMPLETADO | Endpoints directivos funcionando con umbral mínimo configurable (`METRICS_MIN_GROUP`, 1 en el piloto). | Integración de gráficas avanzadas en el panel web directivo. |
 | **Comunidad e Intercambio (`/exchange`)** | NO IMPLEMENTADO | Interfaz visual en frontend disponible. | Diseño de tablas en backend, modelos de Prisma, controladores y servicios. |
 | **Base de Datos Supabase Remota** | PARCIAL | Catálogo de MAC (69 materias, plan 2016, seriación) completamente estructurado. | Aplicar migración `20261103160000`, sembrar datos base y configurar políticas RLS. |
 
@@ -352,7 +352,7 @@ A continuación se detalla la secuencia recomendada para dar continuidad al proy
 
 ### Paso 5: Pruebas E2E Finales y Auditoría de Seguridad
 1. Ejecutar las pruebas automatizadas de Playwright apuntando al backend conectado a Supabase.
-2. Validar que ninguna consulta exponga datos de estudiantes en las vistas con menos de 10 registros (k-anonimato).
+2. Validar que ninguna consulta exponga datos de estudiantes por debajo del umbral `METRICS_MIN_GROUP`.
 3. Realizar simulacro de cierre de sesión multi-dispositivo y revocación de tokens.
 
 ---

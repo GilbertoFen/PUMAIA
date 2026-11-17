@@ -9,6 +9,8 @@ import { JwtStrategy } from './jwt.strategy';
 import { AuditModule } from '../audit/audit.module';
 import { RolesGuard } from './guards/roles.guard';
 import { resolveJwtSecret } from './jwt.secret';
+import { StaffController } from './staff/staff.controller';
+import { StaffService } from './staff/staff.service';
 
 @Module({
   imports: [
@@ -26,8 +28,8 @@ import { resolveJwtSecret } from './jwt.secret';
       }),
     }),
   ],
-  controllers: [AutenticacionController],
-  providers: [AutenticacionService, JwtStrategy, RolesGuard],
+  controllers: [AutenticacionController, StaffController],
+  providers: [AutenticacionService, StaffService, JwtStrategy, RolesGuard],
   exports: [
     AutenticacionService,
     JwtStrategy,

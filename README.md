@@ -44,6 +44,29 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## Correo (invitaciones de personal)
+
+Los correos salen por un **webhook de n8n** que envía con la cuenta de Gmail conectada en n8n.
+
+| Variable | Uso |
+|---|---|
+| `N8N_EMAIL_WEBHOOK_URL` | URL del webhook de n8n que envía el correo. |
+| `N8N_EMAIL_WEBHOOK_API_KEY` | Clave que se manda en la cabecera `X-Email-Api-Key` (n8n la recibe como `x-email-api-key`). |
+| `FRONTEND_URL` | Base del front para el botón del correo (`/profesores` o `/admin`). |
+
+- El backend hace `POST` con `{ from, to, subject, text, html }`. `from` es solo el nombre visible
+  (`PumaIA · FES Acatlán`); el remitente real es la cuenta de Gmail de n8n.
+- Se considera **enviado solo si n8n responde 2xx** (el workflow responde 200 únicamente cuando Gmail
+  confirmó el envío). Cualquier otra respuesta, error de red o timeout de 10 s = no enviado.
+- Si falta cualquiera de las dos variables `N8N_EMAIL_*`, no hay proveedor: la invitación se crea igual,
+  la respuesta trae `emailSent: false` (`NO_PROVIDER_CONFIGURED`) y el panel lo indica.
+- En la bitácora quedan `STAFF_INVITATION_EMAIL_SENT` / `STAFF_INVITATION_EMAIL_FAILED` con el canal y el
+  código HTTP; nunca el contenido del correo, la URL ni la clave.
+- El cliente SMTP interno (`SMTP_HOST` / `SMTP_PORT`, sin TLS ni autenticación) **solo funciona fuera de
+  producción** y solo si no hay webhook configurado; sirve para pruebas con un servidor local (MailHog).
+- Reenviar invitación: `POST /api/autenticacion/staff/:userId/resend-invitation` (solo `INSTITUTION_ADMIN`,
+  solo si la persona sigue `INVITED`); usa el mismo canal.
+
 ## Run tests
 
 ```bash
