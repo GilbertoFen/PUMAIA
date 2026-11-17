@@ -21,8 +21,8 @@ import * as crypto from 'crypto';
 
 @Injectable()
 export class AttendanceService {
-  /** Ventana de rotación del código QR dinámico (25 segundos, dentro del rango requerido de 20 a 30s) */
-  public static readonly QR_WINDOW_SECONDS = 25;
+  /** Ventana de rotación del código QR dinámico (5 segundos) */
+  public static readonly QR_WINDOW_SECONDS = 5;
 
   /** Secciones con horario simulado activo para pruebas de desarrollo */
   private readonly simulatedSections = new Set<string>();
@@ -131,8 +131,16 @@ export class AttendanceService {
       sessionSecret,
       currentStep - 1,
     );
+    const validNext = this.computeQrTokenForStep(
+      sessionSecret,
+      currentStep + 1,
+    );
 
-    return cleanCandidate === validCurrent || cleanCandidate === validPrevious;
+    return (
+      cleanCandidate === validCurrent ||
+      cleanCandidate === validPrevious ||
+      cleanCandidate === validNext
+    );
   }
 
   /**
@@ -260,6 +268,7 @@ export class AttendanceService {
     sectionId: string,
     openedByUserId: string,
     user?: AuthUser,
+    targetDateStr?: string,
   ) {
     const section = await this.prisma.courseSection.findUnique({
       where: { id: sectionId },
@@ -278,10 +287,48 @@ export class AttendanceService {
       );
     }
 
+    // Determinar la fecha de la clase (por defecto hoy en hora local/CDMX)
+    const targetDate = targetDateStr ? new Date(targetDateStr) : new Date();
+    const sessionDate = new Date(
+      Date.UTC(
+        targetDate.getFullYear(),
+        targetDate.getMonth(),
+        targetDate.getDate(),
+      ),
+    );
+
+    const startOfToday = new Date(sessionDate);
+    startOfToday.setUTCHours(0, 0, 0, 0);
+    const endOfToday = new Date(sessionDate);
+    endOfToday.setUTCHours(23, 59, 59, 999);
+
+    // 1. Auto-cerrar sesiones de días anteriores que quedaron abiertas para este grupo
+    await this.prisma.classSession.updateMany({
+      where: {
+        sectionId,
+        status: SessionStatus.OPEN,
+        sessionDate: { lt: startOfToday },
+      },
+      data: {
+        status: SessionStatus.CLOSED,
+        closesAt: new Date(),
+      },
+    });
+
+    // 2. Buscar si ya existe una sesión abierta para la fecha de clase en este grupo
     const existingOpen = await this.prisma.classSession.findFirst({
       where: {
         sectionId,
         status: SessionStatus.OPEN,
+        sessionDate: {
+          gte: startOfToday,
+          lte: endOfToday,
+        },
+      },
+      include: {
+        section: {
+          include: { subject: true, professor: true },
+        },
       },
     });
 
@@ -295,13 +342,15 @@ export class AttendanceService {
       };
     }
 
+    // 3. Crear nueva sesión para la fecha de clase
     const secret = crypto.randomBytes(16).toString('hex').toUpperCase();
 
     const created = await this.prisma.classSession.create({
       data: {
         sectionId,
         openedBy: openedByUserId,
-        startsAt: new Date(),
+        sessionDate,
+        startsAt: targetDate,
         status: SessionStatus.OPEN,
         secret,
       },
@@ -437,6 +486,7 @@ export class AttendanceService {
         data: {
           sessionId: session.id,
           studentId,
+          sessionDate: session.sessionDate || new Date(),
           status: AttendanceStatus.PRESENT,
           method: AttendanceMethod.QR,
           markedAt: new Date(),
@@ -453,6 +503,7 @@ export class AttendanceService {
         },
       },
       update: {
+        sessionDate: session.sessionDate || new Date(),
         status: AttendanceStatus.PRESENT,
         method: AttendanceMethod.QR,
         markedAt: new Date(),
@@ -460,6 +511,7 @@ export class AttendanceService {
       create: {
         sessionId: session.id,
         studentId,
+        sessionDate: session.sessionDate || new Date(),
         status: AttendanceStatus.PRESENT,
         method: AttendanceMethod.QR,
         markedAt: new Date(),
@@ -523,6 +575,7 @@ export class AttendanceService {
             data: {
               sessionId,
               studentId: stId,
+              sessionDate: session.sessionDate || new Date(),
               status: AttendanceStatus.ABSENT,
               method: AttendanceMethod.MANUAL,
               markedAt: new Date(),
@@ -709,12 +762,18 @@ export class AttendanceService {
         session: {
           include: {
             section: {
-              include: { subject: true },
+              include: {
+                subject: true,
+                professor: true,
+              },
             },
           },
         },
       },
-      orderBy: { markedAt: 'desc' },
+      orderBy: [
+        { sessionDate: 'desc' },
+        { markedAt: 'desc' },
+      ],
     });
   }
 
@@ -842,6 +901,189 @@ export class AttendanceService {
     });
 
     return Array.from(combinedStudents.values());
+  }
+
+  /**
+   * Consulta el catálogo de sesiones de clase impartidas para un grupo específico.
+   * Valida titularidad del profesor o perfil de administrador.
+   */
+  async getSectionSessions(sectionId: string, user?: AuthUser) {
+    const section = await this.prisma.courseSection.findUnique({
+      where: { id: sectionId },
+      include: {
+        subject: true,
+        roster: true,
+        enrollments: true,
+      },
+    });
+
+    if (!section) {
+      throw new NotFoundException('Grupo no encontrado.');
+    }
+
+    await this.assertSectionOwnership(section, user);
+
+    const totalStudentsSet = new Set<string>();
+    (section.roster || []).forEach((r) => {
+      totalStudentsSet.add(r.linkedStudentId || r.id);
+    });
+    (section.enrollments || []).forEach((e) => {
+      totalStudentsSet.add(e.studentId);
+    });
+    const totalEnrolled = totalStudentsSet.size;
+
+    const sessions = await this.prisma.classSession.findMany({
+      where: { sectionId },
+      include: {
+        records: {
+          select: {
+            id: true,
+            studentId: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: [
+        { sessionDate: 'desc' },
+        { startsAt: 'desc' },
+      ],
+    });
+
+    return sessions.map((sess) => {
+      const presentCount = sess.records.filter(
+        (r) => r.status === AttendanceStatus.PRESENT,
+      ).length;
+      const absentCount = sess.records.filter(
+        (r) => r.status === AttendanceStatus.ABSENT,
+      ).length;
+
+      return {
+        id: sess.id,
+        sectionId: sess.sectionId,
+        sessionDate: sess.sessionDate,
+        startsAt: sess.startsAt,
+        closesAt: sess.closesAt,
+        status: sess.status,
+        presentCount,
+        absentCount,
+        totalEnrolled,
+        subject: section.subject?.subject || 'Asignatura',
+        groupCode: section.groupCode,
+      };
+    });
+  }
+
+  /**
+   * Consulta el historial detallado de asistencias por fecha/sesión para una materia y grupo.
+   * Permite filtrar por fecha específica o devolver todas las sesiones con sus alumnos.
+   */
+  async getSectionHistory(
+    sectionId: string,
+    user?: AuthUser,
+    filterDate?: string,
+  ) {
+    const section = await this.prisma.courseSection.findUnique({
+      where: { id: sectionId },
+    });
+
+    if (!section) {
+      throw new NotFoundException('Grupo no encontrado.');
+    }
+
+    await this.assertSectionOwnership(section, user);
+
+    let dateWhere = {};
+    if (filterDate) {
+      const d = new Date(filterDate);
+      const startOfDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
+      const endOfDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+      dateWhere = {
+        sessionDate: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+      };
+    }
+
+    const sessions = await this.prisma.classSession.findMany({
+      where: {
+        sectionId,
+        ...dateWhere,
+      },
+      orderBy: [
+        { sessionDate: 'desc' },
+        { startsAt: 'desc' },
+      ],
+    });
+
+    const results: any[] = [];
+    for (const sess of sessions) {
+      const studentsRecords = await this.getSessionRecords(sess.id, user);
+      results.push({
+        sessionId: sess.id,
+        sessionDate: sess.sessionDate,
+        startsAt: sess.startsAt,
+        closesAt: sess.closesAt,
+        status: sess.status,
+        students: studentsRecords,
+      });
+    }
+
+    return results;
+  }
+
+  /**
+   * Consulta el historial individual de asistencia de un alumno específico en una asignatura.
+   */
+  async getSectionStudentAttendanceHistory(
+    sectionId: string,
+    studentId: string,
+    user?: AuthUser,
+  ) {
+    const section = await this.prisma.courseSection.findUnique({
+      where: { id: sectionId },
+      include: { subject: true },
+    });
+
+    if (!section) {
+      throw new NotFoundException('Grupo no encontrado.');
+    }
+
+    await this.assertSectionOwnership(section, user);
+
+    const sessions = await this.prisma.classSession.findMany({
+      where: { sectionId },
+      orderBy: [
+        { sessionDate: 'asc' },
+        { startsAt: 'asc' },
+      ],
+      include: {
+        records: {
+          where: {
+            OR: [
+              { studentId },
+              { student: { id: studentId } },
+              { student: { accountNumber: isNaN(Number(studentId)) ? -1 : Number(studentId) } },
+            ],
+          },
+        },
+      },
+    });
+
+    return sessions.map((sess) => {
+      const rec = sess.records[0];
+      return {
+        sessionId: sess.id,
+        sessionDate: sess.sessionDate,
+        startsAt: sess.startsAt,
+        closesAt: sess.closesAt,
+        sessionStatus: sess.status,
+        status: rec ? rec.status : sess.status === SessionStatus.CLOSED ? 'ABSENT' : 'PENDING',
+        method: rec?.method || null,
+        markedAt: rec?.markedAt ? rec.markedAt.toISOString() : null,
+        recordId: rec?.id || null,
+      };
+    });
   }
 
   /**

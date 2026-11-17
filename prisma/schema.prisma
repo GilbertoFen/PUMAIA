@@ -521,16 +521,18 @@ enum SessionStatus {
 
 // [NUEVO] Una clase concreta. El QR rota cada 20 a 30 s y se calcula con `secret` y la hora (no hay tabla de tokens).
 model ClassSession {
-  id        String             @id @default(uuid()) @map("id_sesion_clase")
-  sectionId String             @map("id_grupo")
-  section   CourseSection      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  openedBy  String             @map("abierta_por")
-  startsAt  DateTime           @map("inicia_en")
-  closesAt  DateTime?          @map("cierra_en")
-  status    SessionStatus      @default(OPEN) @map("estado")
-  secret    String             @map("secreto")
-  records   AttendanceRecord[]
+  id          String             @id @default(uuid()) @map("id_sesion_clase")
+  sectionId   String             @map("id_grupo")
+  section     CourseSection      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  openedBy    String             @map("abierta_por")
+  sessionDate DateTime           @default(now()) @db.Date @map("fecha_clase")
+  startsAt    DateTime           @map("inicia_en")
+  closesAt    DateTime?          @map("cierra_en")
+  status      SessionStatus      @default(OPEN) @map("estado")
+  secret      String             @map("secreto")
+  records     AttendanceRecord[]
 
+  @@index([sectionId, sessionDate])
   @@index([sectionId, startsAt])
   @@map("sesion_clase")
 }
@@ -550,17 +552,19 @@ enum AttendanceMethod {
 // [NUEVO] Al cerrar la clase se crean las ausencias de los inscritos que no escanearon.
 // Las correcciones manuales se registran también en AuditLog.
 model AttendanceRecord {
-  id        String           @id @default(uuid()) @map("id_asistencia")
-  sessionId String           @map("id_sesion_clase")
-  session   ClassSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  studentId String           @map("id_alumno")
-  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  status    AttendanceStatus @map("estado")
-  method    AttendanceMethod @map("metodo")
-  markedAt  DateTime         @default(now()) @map("marcada_en")
-  markedBy  String?          @map("marcada_por") // solo si fue manual
+  id          String           @id @default(uuid()) @map("id_asistencia")
+  sessionId   String           @map("id_sesion_clase")
+  session     ClassSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId   String           @map("id_alumno")
+  student     Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  sessionDate DateTime         @default(now()) @db.Date @map("fecha_clase")
+  status      AttendanceStatus @map("estado")
+  method      AttendanceMethod @map("metodo")
+  markedAt    DateTime         @default(now()) @map("marcada_en")
+  markedBy    String?          @map("marcada_por") // solo si fue manual
 
   @@unique([sessionId, studentId])
+  @@index([studentId, sessionDate])
   @@map("asistencia")
 }
 

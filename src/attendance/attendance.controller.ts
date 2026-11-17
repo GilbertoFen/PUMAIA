@@ -32,7 +32,40 @@ export class AttendanceController {
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateSessionDto,
   ) {
-    return this.service.openSession(dto.sectionId, user.userId, user);
+    return this.service.openSession(dto.sectionId, user.userId, user, dto.date);
+  }
+
+  @Get('sections/:id/sessions')
+  @Roles(RoleType.INSTITUTION_ADMIN, RoleType.PROFESSOR)
+  async getSectionSessions(
+    @Param('id') sectionId: string,
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.service.getSectionSessions(sectionId, user);
+  }
+
+  @Get('sections/:id/history')
+  @Roles(RoleType.INSTITUTION_ADMIN, RoleType.PROFESSOR)
+  async getSectionHistory(
+    @Param('id') sectionId: string,
+    @Query('date') date?: string,
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.service.getSectionHistory(sectionId, user, date);
+  }
+
+  @Get('sections/:sectionId/students/:studentId/history')
+  @Roles(RoleType.INSTITUTION_ADMIN, RoleType.PROFESSOR)
+  async getSectionStudentHistory(
+    @Param('sectionId') sectionId: string,
+    @Param('studentId') studentId: string,
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.service.getSectionStudentAttendanceHistory(
+      sectionId,
+      studentId,
+      user,
+    );
   }
 
   @Get('sessions/:id/qr-token')
